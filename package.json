@@ -1,0 +1,54 @@
+{
+  "name": "craftcms-project-starter",
+  "version": "1.0.0",
+  "description": "Craft CMS Project Starter npm dependencies",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "webpack --mode development --config webpack.dev.js && webpack-dev-server --mode development --hot --config webpack.server.js",
+    "build": "webpack --mode production --config webpack.prod.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rppld/craftcms-webpack-starter"
+  },
+  "author": "Philipp Rappold <philipp@rppld.co>",
+  "license": "ISC",
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-eslint": "^8.2.1",
+    "babel-loader": "^7.1.2",
+    "babel-plugin-syntax-dynamic-import": "^6.18.0",
+    "babel-preset-env": "^1.6.0",
+    "babel-preset-stage-1": "^6.24.1",
+    "clean-webpack-plugin": "^0.1.17",
+    "copy-webpack-plugin": "^4.1.0",
+    "css-loader": "^0.28.10",
+    "eslint": "^4.17.0",
+    "eslint-config-prettier": "^2.9.0",
+    "eslint-config-standard": "^11.0.0-beta.0",
+    "eslint-loader": "^1.9.0",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^6.0.0",
+    "eslint-plugin-prettier": "^2.6.0",
+    "eslint-plugin-promise": "^3.5.0",
+    "eslint-plugin-standard": "^3.0.1",
+    "eslint-plugin-vue": "^4.2.2",
+    "extract-text-webpack-plugin": "^4.0.0-beta.0",
+    "file-loader": "^1.1.4",
+    "friendly-errors-webpack-plugin": "^1.6.1",
+    "html-webpack-plugin": "^3.0.4",
+    "prettier": "^1.10.2",
+    "style-loader": "^0.20.1",
+    "vue-loader": "^14.1.1",
+    "vue-template-compiler": "^2.5.15",
+    "webpack": "^4.0.1",
+    "webpack-cli": "^2.0.9",
+    "webpack-dev-server": "^3.1.0",
+    "webpack-merge": "^4.1.0"
+  },
+  "dependencies": {
+    "axios": "^0.17.1",
+    "picturefill": "^3.0.2",
+    "vue": "^2.5.15"
+  }
+}

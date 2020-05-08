@@ -1,0 +1,36 @@
+.sans-serif {
+  font-family: "Helvetica Neue", ubuntu, roboto, noto, "segoe ui", arial,
+    sans-serif;
+}
+
+.fonts-loaded .archivo-black {
+  font-family: "ArchivoBlack", sans-serif;
+}
+
+.invisible {
+  transition: 400ms;
+  transform: translate3d(0, 100px, 0) scale(0.9);
+  opacity: 0;
+}
+
+.visible {
+  transition: 400ms;
+  transform: translate3d(0, 0, 0) scale(1);
+  opacity: 1;
+}
+
+@media screen and (min-width: 30em) {
+  /* .className-ns */
+}
+
+@media screen and (min-width: 30em) and (max-width: 60em) {
+  /* .className-m */
+}
+
+@media screen and (min-width: 60em) {
+  /* .className-l */
+}
+
+@media screen and (min-width: 80em) {
+  /* .className-xl */
+}
