@@ -24,9 +24,9 @@
 
   {{ entry.body }}
 
-  <h2>Recent Blog Entries</h2>
+  <h2>All Organizations</h2>
   <ul>
-    {% for entry in craft.entries.section('blog').limit(5).all() %}
+    {% for entry in craft.entries.section('orgs').limit(5).all() %}
       <li><a href="{{ entry.url }}">{{ entry.title }}</a></li>
     {% endfor %}
   </ul>

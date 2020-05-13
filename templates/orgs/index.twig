@@ -11,14 +11,14 @@
  #}
 
 {% extends "_layout" %}
-{% set title = "Blog" %}
+{# {% set title = "Organizations" %} #}
 
 {% block main %}
-	<h1>Blog</h1>
+	<h1>Organizations</h1>
 
   <div id="cool"></div>
 
-	{% for entry in craft.entries.section('blog').all() %}
+	{% for entry in craft.entries.section('orgs').all() %}
 		<article>
 			<h3><a href="{{ entry.url }}">{{ entry.title }}</a></h3>
 			<p>Posted on {{ entry.postDate.format('F d, Y') }}</p>

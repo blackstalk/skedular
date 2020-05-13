@@ -4,7 +4,7 @@ const dev = require("./webpack.dev.js")
 
 module.exports = merge(dev, {
   devServer: {
-    host: "localhost",
+    host: "https://skedular.test",
     port: 8080,
     headers: {
       "Access-Control-Allow-Origin": "*"
