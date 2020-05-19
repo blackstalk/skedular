@@ -9,27 +9,24 @@ namespace craft\web\twig;
 
 use Craft;
 use craft\web\View;
+use Twig\Loader\ExistsLoaderInterface;
+use Twig\Loader\LoaderInterface;
+use Twig\Source;
 
 /**
  * Loads Craft templates into Twig.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-
 /** @noinspection PhpDeprecationInspection */
-class TemplateLoader implements \Twig_LoaderInterface, \Twig_ExistsLoaderInterface
-{
-    // Properties
-    // =========================================================================
 
+class TemplateLoader implements LoaderInterface, ExistsLoaderInterface
+{
     /**
      * @var View|null
      */
     protected $view;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Constructor
@@ -60,7 +57,7 @@ class TemplateLoader implements \Twig_LoaderInterface, \Twig_ExistsLoaderInterfa
             throw new TemplateLoaderException($name, Craft::t('app', 'Tried to read the template at {path}, but could not. Check the permissions.', ['path' => $template]));
         }
 
-        return new \Twig_Source(file_get_contents($template), $name, $template);
+        return new Source(file_get_contents($template), $name, $template);
     }
 
     /**
@@ -100,9 +97,6 @@ class TemplateLoader implements \Twig_LoaderInterface, \Twig_ExistsLoaderInterfa
 
         return false;
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Returns the path to a given template, or throws a TemplateLoaderException.

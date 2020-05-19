@@ -1,4 +1,33 @@
-# Changelog
+# Release Notes for Element API
+
+## 2.6.0 - 2019-08-01
+
+### Added
+- Added the `callback` endpoint config setting, which enables JSONP output. ([#96](https://github.com/craftcms/element-api/issues/96))
+
+### Changed
+- The `defaults` setting can now be set to a callable. ([#98](https://github.com/craftcms/element-api/pull/98))
+- `criteria` endpoint settings can now specify an `offset`. ([#99](https://github.com/craftcms/element-api/issues/99)) 
+- Updated Fractal to 0.18. ([#109](https://github.com/craftcms/element-api/issues/109))
+
+### Deprecated
+- Deprecated `craft\elementapi\resources\EntryResource`. ([#108](https://github.com/craftcms/element-api/issues/108))
+
+### Fixed
+- Fixed a bug where field types that return objects were getting converted to arrays by the default element transformer. Now their [serialized value](https://docs.craftcms.com/api/v3/craft-base-fieldinterface.html#method-serializevalue) is used instead. ([#75](https://github.com/craftcms/element-api/issues/75))
+
+## 2.5.4 - 2018-07-29
+
+### Changed
+- The `generateTransformsBeforePageLoad` Craft config setting is now automatically enabled for all Element API endpoints. ([#81](https://github.com/craftcms/element-api/issues/81))
+
+### Fixed
+- Fixed a bug where it wasn’t possible to set `cache`, `serializer`, `jsonOptions`, `pretty`, `includes`, and `excludes` endpoint config options in the `defaults` array. ([#69](https://github.com/craftcms/element-api/pull/69))
+
+## 2.5.3 - 2018-06-20
+
+### Changed
+- The cache key now takes into account the current site id. ([#76](https://github.com/craftcms/element-api/issues/76))
 
 ## 2.5.2- 2017-12-13
 

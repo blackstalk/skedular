@@ -23,26 +23,30 @@ use yii\base\InvalidConfigException;
 /**
  * The Config service provides APIs for retrieving the values of Craft’s [config settings](http://craftcms.com/docs/config-settings),
  * as well as the values of any plugins’ config settings.
- * An instance of the Config service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getConfig()|<code>Craft::$app->config</code>]].
+ * An instance of the Config service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getConfig()|`Craft::$app->config`]].
  *
  * @property DbConfig $db the DB config settings
  * @property GeneralConfig $general the general config settings
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Config extends Component
 {
-    // Constants
-    // =========================================================================
-
     const CATEGORY_DB = 'db';
     const CATEGORY_GENERAL = 'general';
 
-    // Properties
-    // =========================================================================
-
     /**
      * @var string|null The environment ID Craft is currently running in.
+     *
+     * ---
+     * ```php
+     * $env = Craft::$app->config->env;
+     * ```
+     * ```twig
+     * {% if craft.app.config.env == 'production' %}
+     *     {% include "_includes/ga" %}
+     * {% endif %}
+     * ```
      */
     public $env;
 
@@ -66,9 +70,6 @@ class Config extends Component
      */
     private $_dotEnvPath;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * Returns all of the config settings for a given category.
      *
@@ -91,7 +92,7 @@ class Config extends Component
                 $class = GeneralConfig::class;
                 break;
             default:
-                throw new InvalidArgumentException('Invalid config category: '.$category);
+                throw new InvalidArgumentException('Invalid config category: ' . $category);
         }
 
         // Get any custom config settings
@@ -102,7 +103,7 @@ class Config extends Component
         if ($category === self::CATEGORY_GENERAL) {
             /** @var GeneralConfig $config */
             if ($config->securityKey === null) {
-                $keyPath = Craft::$app->getPath()->getRuntimePath().DIRECTORY_SEPARATOR.'validation.key';
+                $keyPath = Craft::$app->getPath()->getRuntimePath() . DIRECTORY_SEPARATOR . 'validation.key';
                 if (file_exists($keyPath)) {
                     $config->securityKey = trim(file_get_contents($keyPath));
                 } else {
@@ -110,7 +111,7 @@ class Config extends Component
                     try {
                         FileHelper::writeToFile($keyPath, $key);
                     } catch (ErrorException $e) {
-                        throw new InvalidConfigException('The securityKey config setting is required, and an auto-generated value could not be generated: '.$e->getMessage());
+                        throw new InvalidConfigException('The securityKey config setting is required, and an auto-generated value could not be generated: ' . $e->getMessage());
                     }
                     $config->securityKey = $key;
                 }
@@ -128,6 +129,15 @@ class Config extends Component
     /**
      * Returns the DB config settings.
      *
+     * ---
+     *
+     * ```php
+     * $username = Craft::$app->config->db->username;
+     * ```
+     * ```twig
+     * {% set username = craft.app.config.db.username %}
+     * ```
+     *
      * @return DbConfig
      */
     public function getDb(): DbConfig
@@ -138,6 +148,17 @@ class Config extends Component
     /**
      * Returns the general config settings.
      *
+     * ---
+     *
+     * ```php
+     * $logoutPath = Craft::$app->config->general->logoutPath;
+     * ```
+     * ```twig
+     * <a href="{{ url(craft.app.config.general.logoutPath) }}">
+     *     Logout
+     * </a>
+     * ```
+     *
      * @return GeneralConfig
      */
     public function getGeneral(): GeneralConfig
@@ -146,15 +167,33 @@ class Config extends Component
     }
 
     /**
+     * Returns the path to a config file.
+     *
+     * @param string $filename The filename (sans .php extension)
+     * @return string
+     */
+    public function getConfigFilePath(string $filename): string
+    {
+        return $this->configDir . DIRECTORY_SEPARATOR . $filename . '.php';
+    }
+
+    /**
      * Loads a config file from the config/ folder, checks if it's a multi-environment
      * config, and returns the values.
+     *
+     * ---
+     *
+     * ```php
+     * // get the values defined in config/foo.php
+     * $settings = Craft::$app->config->getConfigFromFile('foo');
+     * ```
      *
      * @param $filename
      * @return array
      */
     public function getConfigFromFile(string $filename): array
     {
-        $path = $this->configDir.DIRECTORY_SEPARATOR.$filename.'.php';
+        $path = $this->getConfigFilePath($filename);
 
         if (!file_exists($path)) {
             return [];
@@ -211,15 +250,18 @@ class Config extends Component
 
         $contents = file_get_contents($path);
         $qName = preg_quote($name, '/');
-        $value = addslashes($value);
-        $qValue = str_replace('$', '\\$', $value);
+        $slashedValue = addslashes($value);
+        $qValue = str_replace('$', '\\$', $slashedValue);
         $contents = preg_replace("/^(\s*){$qName}=.*/m", "\$1{$name}=\"{$qValue}\"", $contents, -1, $count);
 
         if ($count === 0) {
             $contents = rtrim($contents);
-            $contents = ($contents ? $contents.PHP_EOL.PHP_EOL : '')."{$name}=\"{$value}\"".PHP_EOL;
+            $contents = ($contents ? $contents . PHP_EOL . PHP_EOL : '') . "{$name}=\"{$slashedValue}\"" . PHP_EOL;
         }
 
         FileHelper::writeToFile($path, $contents);
+
+        // Now actually set the environment variable
+        putenv("{$name}={$value}");
     }
 }

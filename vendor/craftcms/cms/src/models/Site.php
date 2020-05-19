@@ -9,8 +9,10 @@ namespace craft\models;
 
 use Craft;
 use craft\base\Model;
+use craft\behaviors\EnvAttributeParserBehavior;
 use craft\records\Site as SiteRecord;
 use craft\validators\HandleValidator;
+use craft\validators\LanguageValidator;
 use craft\validators\UniqueValidator;
 use craft\validators\UrlValidator;
 use yii\base\InvalidConfigException;
@@ -19,13 +21,10 @@ use yii\base\InvalidConfigException;
  * Site model class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Site extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -74,42 +73,83 @@ class Site extends Model
     /**
      * @var string|null Base URL
      */
-    public $baseUrl;
+    public $baseUrl = '@web/';
 
     /**
      * @var int Sort order
      */
     public $sortOrder = 1;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|null Site UID
+     */
+    public $uid;
 
     /**
-     * @inheritdoc
+     * @var \DateTime Date created
      */
-    public function __construct($config = [])
+    public $dateCreated;
+
+    /**
+     * @var \DateTime Date updated
+     */
+    public $dateUpdated;
+
+    /**
+     * Returns the site’s base URL.
+     *
+     * @return string|null
+     * @since 3.1.0
+     */
+    public function getBaseUrl()
     {
-        // Normalize the base URL
-        if (isset($config['baseUrl'])) {
-            $config['baseUrl'] = rtrim($config['baseUrl'], '/').'/';
+        if ($this->baseUrl) {
+            return rtrim(Craft::parseEnv($this->baseUrl), '/') . '/';
         }
 
-        parent::__construct($config);
+        return null;
     }
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    public function behaviors()
     {
-        $rules = [
-            [['groupId', 'name', 'handle', 'language'], 'required'],
-            [['id', 'groupId'], 'number', 'integerOnly' => true],
-            [['name', 'handle', 'baseUrl'], 'string', 'max' => 255],
-            [['language'], 'string', 'max' => 12],
-            [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']],
-            [['baseUrl'], UrlValidator::class, 'allowAlias' => true, 'defaultScheme' => 'http'],
+        $behaviors = parent::behaviors();
+        $behaviors['parser'] = [
+            'class' => EnvAttributeParserBehavior::class,
+            'attributes' => [
+                'baseUrl',
+            ],
         ];
+        return $behaviors;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function attributeLabels()
+    {
+        return [
+            'baseUrl' => Craft::t('app', 'Base URL'),
+            'handle' => Craft::t('app', 'Handle'),
+            'language' => Craft::t('app', 'Language'),
+            'name' => Craft::t('app', 'Name'),
+        ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    protected function defineRules(): array
+    {
+        $rules = parent::defineRules();
+        $rules[] = [['groupId', 'name', 'handle', 'language'], 'required'];
+        $rules[] = [['id', 'groupId'], 'number', 'integerOnly' => true];
+        $rules[] = [['name', 'handle', 'baseUrl'], 'string', 'max' => 255];
+        $rules[] = [['language'], LanguageValidator::class, 'onlySiteLanguages' => false];
+        $rules[] = [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']];
+        $rules[] = [['baseUrl'], UrlValidator::class, 'defaultScheme' => 'http'];
 
         if (Craft::$app->getIsInstalled()) {
             $rules[] = [['name', 'handle'], UniqueValidator::class, 'targetClass' => SiteRecord::class];
@@ -125,7 +165,7 @@ class Site extends Model
      */
     public function __toString(): string
     {
-        return Craft::t('site', $this->name);
+        return Craft::t('site', $this->name) ?: static::class;
     }
 
     /**
@@ -141,7 +181,7 @@ class Site extends Model
         }
 
         if (($group = Craft::$app->getSites()->getGroupById($this->groupId)) === null) {
-            throw new InvalidConfigException('Invalid site group ID: '.$this->groupId);
+            throw new InvalidConfigException('Invalid site group ID: ' . $this->groupId);
         }
 
         return $group;
@@ -166,6 +206,6 @@ class Site extends Model
     public function overrideBaseUrl(string $baseUrl)
     {
         $this->originalBaseUrl = (string)$this->baseUrl;
-        $this->baseUrl = rtrim($baseUrl, '/').'/';
+        $this->baseUrl = $baseUrl;
     }
 }

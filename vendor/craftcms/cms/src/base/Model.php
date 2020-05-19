@@ -8,18 +8,39 @@
 namespace craft\base;
 
 use Craft;
+use craft\events\DefineBehaviorsEvent;
+use craft\events\DefineRulesEvent;
 use craft\helpers\DateTimeHelper;
+use craft\helpers\StringHelper;
 
 /**
  * Model base class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 abstract class Model extends \yii\base\Model
 {
-    // Public Methods
-    // =========================================================================
+    use ClonefixTrait;
+
+    /**
+     * @event \yii\base\Event The event that is triggered after the model's init cycle
+     * @see init()
+     */
+    const EVENT_INIT = 'init';
+
+    /**
+     * @event DefineBehaviorsEvent The event that is triggered when defining the class behaviors
+     * @see behaviors()
+     */
+    const EVENT_DEFINE_BEHAVIORS = 'defineBehaviors';
+
+    /**
+     * @event DefineRulesEvent The event that is triggered when defining the model rules
+     * @see rules()
+     * @since 3.1.0
+     */
+    const EVENT_DEFINE_RULES = 'defineRules';
 
     /**
      * @inheritdoc
@@ -34,6 +55,53 @@ abstract class Model extends \yii\base\Model
                 $this->$attribute = DateTimeHelper::toDateTime($this->$attribute);
             }
         }
+
+        if ($this->hasEventHandlers(self::EVENT_INIT)) {
+            $this->trigger(self::EVENT_INIT);
+        }
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function behaviors()
+    {
+        // Fire a 'defineBehaviors' event
+        $event = new DefineBehaviorsEvent();
+        $this->trigger(self::EVENT_DEFINE_BEHAVIORS, $event);
+        return $event->behaviors;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function rules()
+    {
+        $rules = $this->defineRules();
+
+        // Give plugins a chance to modify them
+        $event = new DefineRulesEvent([
+            'rules' => $rules,
+        ]);
+        $this->trigger(self::EVENT_DEFINE_RULES, $event);
+
+        return $event->rules;
+    }
+
+    /**
+     * Returns the validation rules for attributes.
+     *
+     * See [[rules()]] for details about what should be returned.
+     *
+     * Models should override this method instead of [[rules()]] so [[EVENT_DEFINE_RULES]] handlers can modify the
+     * class-defined rules.
+     *
+     * @return array
+     * @since 3.4.0
+     */
+    protected function defineRules(): array
+    {
+        return [];
     }
 
     /**
@@ -53,6 +121,10 @@ abstract class Model extends \yii\base\Model
 
         if (property_exists($this, 'dateUpdated')) {
             $attributes[] = 'dateUpdated';
+        }
+
+        if (property_exists($this, 'dateDeleted')) {
+            $attributes[] = 'dateDeleted';
         }
 
         return $attributes;
@@ -82,20 +154,49 @@ abstract class Model extends \yii\base\Model
     /**
      * Adds errors from another model, with a given attribute name prefix.
      *
-     * @param \yii\base\Model
-     * @param string $attrPrefix
+     * @param \yii\base\Model $model The other model
+     * @param string $attrPrefix The prefix that should be added to error attributes when adding them to this model
      */
     public function addModelErrors(\yii\base\Model $model, string $attrPrefix = '')
     {
         if ($attrPrefix !== '') {
-            $attrPrefix = rtrim($attrPrefix, '.').'.';
+            $attrPrefix = rtrim($attrPrefix, '.') . '.';
         }
 
         foreach ($model->getErrors() as $attribute => $errors) {
             foreach ($errors as $error) {
-                $this->addError($attrPrefix.$attribute, $error);
+                $this->addError($attrPrefix . $attribute, $error);
             }
         }
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function hasErrors($attribute = null)
+    {
+        $includeNested = $attribute !== null && StringHelper::endsWith($attribute, '.*');
+
+        if ($includeNested) {
+            $attribute = StringHelper::removeRight($attribute, '.*');
+        }
+
+        if (parent::hasErrors($attribute)) {
+            return true;
+        }
+
+        if ($includeNested) {
+            foreach ($this->getErrors() as $attr => $errors) {
+                if (strpos($attr, $attribute . '.') === 0) {
+                    return true;
+                }
+                if (strpos($attr, $attribute . '[') === 0) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     // Deprecated Methods
@@ -105,10 +206,10 @@ abstract class Model extends \yii\base\Model
      * Returns the first error of the specified attribute.
      *
      * @param string $attribute The attribute name.
-     * @return string The error message. Null is returned if no error.
-     * @deprecated in 3.0. Use [[getFirstError()]] instead.
+     * @return string|null The error message, or null if there are no errors.
+     * @deprecated in 3.0.0. Use [[getFirstError()]] instead.
      */
-    public function getError(string $attribute): string
+    public function getError(string $attribute)
     {
         Craft::$app->getDeprecator()->log('Model::getError()', 'getError() has been deprecated. Use getFirstError() instead.');
 

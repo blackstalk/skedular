@@ -20,13 +20,10 @@ use craft\validators\UniqueValidator;
  *
  * @mixin FieldLayoutBehavior
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class TagGroup extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -47,34 +44,47 @@ class TagGroup extends Model
      */
     public $fieldLayoutId;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var int|null Field layout ID
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
     public function behaviors()
     {
+        $behaviors = parent::behaviors();
+        $behaviors['fieldLayout'] = [
+            'class' => FieldLayoutBehavior::class,
+            'elementType' => Tag::class,
+        ];
+        return $behaviors;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function attributeLabels()
+    {
         return [
-            'fieldLayout' => [
-                'class' => FieldLayoutBehavior::class,
-                'elementType' => Tag::class
-            ],
+            'handle' => Craft::t('app', 'Handle'),
+            'name' => Craft::t('app', 'Name'),
         ];
     }
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        return [
-            [['id', 'fieldLayoutId'], 'number', 'integerOnly' => true],
-            [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']],
-            [['name', 'handle'], UniqueValidator::class, 'targetClass' => TagGroupRecord::class],
-            [['name', 'handle'], 'required'],
-            [['name', 'handle'], 'string', 'max' => 255],
-        ];
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'fieldLayoutId'], 'number', 'integerOnly' => true];
+        $rules[] = [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']];
+        $rules[] = [['name', 'handle'], UniqueValidator::class, 'targetClass' => TagGroupRecord::class];
+        $rules[] = [['name', 'handle'], 'required'];
+        $rules[] = [['name', 'handle'], 'string', 'max' => 255];
+        return $rules;
     }
 
     /**
@@ -84,6 +94,6 @@ class TagGroup extends Model
      */
     public function __toString(): string
     {
-        return Craft::t('site', $this->name);
+        return Craft::t('site', $this->name) ?: static::class;
     }
 }

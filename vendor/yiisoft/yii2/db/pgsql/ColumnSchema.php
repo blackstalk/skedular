@@ -49,6 +49,11 @@ class ColumnSchema extends \yii\db\ColumnSchema
      * @deprecated Since 2.0.14.1 and will be removed in 2.1.
      */
     public $deserializeArrayColumnToArrayExpression = true;
+    /**
+     * @var string name of associated sequence if column is auto-incremental
+     * @since 2.0.29
+     */
+    public $sequenceName;
 
 
     /**
@@ -56,15 +61,21 @@ class ColumnSchema extends \yii\db\ColumnSchema
      */
     public function dbTypecast($value)
     {
+        if ($value === null) {
+            return $value;
+        }
+
         if ($value instanceof ExpressionInterface) {
             return $value;
         }
 
-        if (!$this->disableArraySupport && $this->dimension > 0) {
-            return new ArrayExpression($value, $this->dbType, $this->dimension);
+        if ($this->dimension > 0) {
+            return $this->disableArraySupport
+                ? (string) $value
+                : new ArrayExpression($value, $this->dbType, $this->dimension);
         }
         if (!$this->disableJsonSupport && in_array($this->dbType, [Schema::TYPE_JSON, Schema::TYPE_JSONB], true)) {
-            return new JsonExpression($value, $this->type);
+            return new JsonExpression($value, $this->dbType);
         }
 
         return $this->typecast($value);
@@ -75,7 +86,10 @@ class ColumnSchema extends \yii\db\ColumnSchema
      */
     public function phpTypecast($value)
     {
-        if (!$this->disableArraySupport && $this->dimension > 0) {
+        if ($this->dimension > 0) {
+            if ($this->disableArraySupport) {
+                return $value;
+            }
             if (!is_array($value)) {
                 $value = $this->getArrayParser()->parse($value);
             }
@@ -83,6 +97,8 @@ class ColumnSchema extends \yii\db\ColumnSchema
                 array_walk_recursive($value, function (&$val, $key) {
                     $val = $this->phpTypecastValue($val);
                 });
+            } elseif ($value === null) {
+                return null;
             }
 
             return $this->deserializeArrayColumnToArrayExpression

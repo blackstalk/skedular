@@ -10,11 +10,11 @@ namespace yii\queue;
 use yii\base\Event;
 
 /**
- * Class JobEvent
+ * Job Event.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */
-class JobEvent extends Event
+abstract class JobEvent extends Event
 {
     /**
      * @var Queue
@@ -26,7 +26,7 @@ class JobEvent extends Event
      */
     public $id;
     /**
-     * @var JobInterface
+     * @var JobInterface|null
      */
     public $job;
     /**

@@ -11,19 +11,21 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\base\Field;
 use craft\base\PreviewableFieldInterface;
+use craft\base\SortableFieldInterface;
+use craft\elements\db\ElementQuery;
+use craft\elements\db\ElementQueryInterface;
+use craft\helpers\Db;
+use GraphQL\Type\Definition\Type;
 use yii\db\Schema;
 
 /**
  * Lightswitch represents a Lightswitch field.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class Lightswitch extends Field implements PreviewableFieldInterface
+class Lightswitch extends Field implements PreviewableFieldInterface, SortableFieldInterface
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -32,16 +34,18 @@ class Lightswitch extends Field implements PreviewableFieldInterface
         return Craft::t('app', 'Lightswitch');
     }
 
-    // Properties
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public static function valueType(): string
+    {
+        return 'bool';
+    }
 
     /**
      * @var bool Whether the lightswitch should be enabled by default
      */
     public $default = false;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -77,7 +81,7 @@ class Lightswitch extends Field implements PreviewableFieldInterface
         return Craft::$app->getView()->renderTemplate('_includes/forms/lightswitch',
             [
                 'id' => $id,
-                'labelId' => $id.'-label',
+                'labelId' => $id . '-label',
                 'name' => $this->handle,
                 'on' => (bool)$value,
             ]);
@@ -89,10 +93,10 @@ class Lightswitch extends Field implements PreviewableFieldInterface
     public function getTableAttributeHtml($value, ElementInterface $element): string
     {
         if ($value) {
-            return '<div class="status enabled" title="'.Craft::t('app', 'Enabled').'"></div>';
+            return '<div class="status enabled" title="' . Craft::t('app', 'Enabled') . '"></div>';
         }
 
-        return '<div class="status" title="'.Craft::t('app', 'Not enabled').'"></div>';
+        return '<div class="status" title="' . Craft::t('app', 'Not enabled') . '"></div>';
     }
 
     /**
@@ -106,5 +110,28 @@ class Lightswitch extends Field implements PreviewableFieldInterface
         }
 
         return (bool)$value;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function modifyElementsQuery(ElementQueryInterface $query, $value)
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $column = 'content.' . Craft::$app->getContent()->fieldColumnPrefix . $this->handle;
+        /** @var ElementQuery $query */
+        $query->subQuery->andWhere(Db::parseBooleanParam($column, $value, (bool)$this->default));
+        return null;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getContentGqlType()
+    {
+        return Type::boolean();
     }
 }

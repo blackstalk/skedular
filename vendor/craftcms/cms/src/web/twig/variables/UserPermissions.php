@@ -9,20 +9,17 @@ namespace craft\web\twig\variables;
 
 use Craft;
 
-Craft::$app->requireEdition(Craft::Client);
+Craft::$app->requireEdition(Craft::Pro);
 
 /**
  * User permission functions.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
- * @deprecated in 3.0
+ * @since 3.0.0
+ * @deprecated in 3.0.0
  */
 class UserPermissions
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * Returns all of the known permissions, sorted by category.
      *

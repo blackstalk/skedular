@@ -1,6 +1,10 @@
 <?php
 
+use craft\helpers\StringHelper;
+
 return [
+    'assets/<volumeHandle:{handle}>' => ['template' => 'assets'],
+    'assets/<volumeHandle:{handle}>/<assetId:\d+><filename:(?:-[^\/]*)?>' => 'assets/edit-asset',
     'categories' => 'categories/category-index',
     'categories/<groupHandle:{handle}>' => 'categories/category-index',
     'categories/<groupHandle:{handle}>/new' => 'categories/edit-category',
@@ -9,12 +13,8 @@ return [
     'categories/<groupHandle:{handle}>/new/<siteHandle:{handle}>' => 'categories/edit-category',
     'dashboard' => 'dashboard/index',
     'entries/<sectionHandle:{handle}>' => ['template' => 'entries'],
-    'entries/<sectionHandle:{handle}>/new' => 'entries/edit-entry',
-    'entries/<sectionHandle:{handle}>/new/<siteHandle:{handle}>' => 'entries/edit-entry',
-    'entries/<sectionHandle:{handle}>/<entryId:\d+><slug:(?:-[^\/]*)?>' => 'entries/edit-entry',
-    'entries/<sectionHandle:{handle}>/<entryId:\d+><slug:(?:-[^\/]*)?>/<siteHandle:{handle}>' => 'entries/edit-entry',
-    'entries/<sectionHandle:{handle}>/<entryId:\d+><slug:(?:-[^\/]*?)?>/drafts/<draftId:\d+>' => 'entries/edit-entry',
-    'entries/<sectionHandle:{handle}>/<entryId:\d+><slug:(?:-[^\/]*)?>/versions/<versionId:\d+>' => 'entries/edit-entry',
+    'entries/<section:{handle}>/new' => 'entry-revisions/create-draft',
+    'entries/<section:{handle}>/<entryId:\d+><slug:(?:-[^\/]*)?>' => 'entries/edit-entry',
     'globals' => 'globals',
     'globals/<globalSetHandle:{handle}>' => 'globals/edit-content',
     'globals/<siteHandle:{handle}>/<globalSetHandle:{handle}>' => 'globals/edit-content',
@@ -49,6 +49,7 @@ return [
                 'day' => '(?:0?[1-9]|[12][0-9]|3[01])',
                 'number' => '\d+',
                 'page' => '\d+',
+                'uid' => StringHelper::UUID_PATTERN,
                 'slug' => '[^\/]+',
                 'tag' => '[^\/]+',
                 '*' => '[^\/]+',
@@ -69,7 +70,7 @@ return [
     'settings/tags/<tagGroupId:\d+>' => 'tags/edit-tag-group',
     'settings/users' => ['template' => 'settings/users/fields'],
     'utilities' => 'utilities',
-    'utilities/<id:[\w\-]+>' => 'utilities/show-utility',
+    'utilities/<id:[\w\-]+><extra:(\/.*)?>' => 'utilities/show-utility',
     'plugin-store' => 'plugin-store',
     'plugin-store/callback' => 'plugin-store/callback',
     'plugin-store/<url:(.*)>' => 'plugin-store',

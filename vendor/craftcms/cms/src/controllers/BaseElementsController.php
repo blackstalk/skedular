@@ -12,38 +12,26 @@ use craft\base\ElementInterface;
 use craft\errors\InvalidTypeException;
 use craft\web\Controller;
 use yii\web\BadRequestHttpException;
-use yii\web\ForbiddenHttpException;
 
 /**
  * The BaseElementsController class provides some common methods for [[ElementsController]] and [[ElementIndexesController]].
  * Note that all actions in the controller require an authenticated Craft session via [[allowAnonymous]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 abstract class BaseElementsController extends Controller
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * Initializes the application component.
      *
-     * @throws ForbiddenHttpException if this is not a Control Panel request
+     * @throws BadRequestHttpException
      */
     public function init()
     {
-        // Element controllers only support JSON responses
-        $this->requireAcceptsJson();
-
-        // Element controllers are only available to the Control Panel
-        if (!Craft::$app->getRequest()->getIsCpRequest()) {
-            throw new ForbiddenHttpException('Action only available from the Control Panel');
-        }
+        $this->requireCpRequest();
+        parent::init();
     }
-
-    // Protected Methods
-    // =========================================================================
 
     /**
      * Returns the posted element type class.

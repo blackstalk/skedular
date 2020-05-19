@@ -22,13 +22,10 @@ use yii\base\InvalidConfigException;
  *
  * @mixin FieldLayoutBehavior
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class EntryType extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -69,50 +66,64 @@ class EntryType extends Model
      */
     public $titleFormat;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string UID
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
     public function behaviors()
     {
+        $behaviors = parent::behaviors();
+        $behaviors['fieldLayout'] = [
+            'class' => FieldLayoutBehavior::class,
+            'elementType' => Entry::class,
+        ];
+        return $behaviors;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function attributeLabels()
+    {
         return [
-            'fieldLayout' => [
-                'class' => FieldLayoutBehavior::class,
-                'elementType' => Entry::class
-            ],
+            'handle' => Craft::t('app', 'Handle'),
+            'name' => Craft::t('app', 'Name'),
+            'titleFormat' => Craft::t('app', 'Title Format'),
+            'titleLabel' => Craft::t('app', 'Title Field Label'),
         ];
     }
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        $rules = [
-            [['id', 'sectionId', 'fieldLayoutId'], 'number', 'integerOnly' => true],
-            [['name', 'handle'], 'required'],
-            [['name', 'handle'], 'string', 'max' => 255],
-            [
-                ['handle'],
-                HandleValidator::class,
-                'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']
-            ],
-            [
-                ['name'],
-                UniqueValidator::class,
-                'targetClass' => EntryTypeRecord::class,
-                'targetAttribute' => ['name', 'sectionId'],
-                'comboNotUnique' => Craft::t('yii', '{attribute} "{value}" has already been taken.'),
-            ],
-            [
-                ['handle'],
-                UniqueValidator::class,
-                'targetClass' => EntryTypeRecord::class,
-                'targetAttribute' => ['handle', 'sectionId'],
-                'comboNotUnique' => Craft::t('yii', '{attribute} "{value}" has already been taken.'),
-            ],
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'sectionId', 'fieldLayoutId'], 'number', 'integerOnly' => true];
+        $rules[] = [['name', 'handle'], 'required'];
+        $rules[] = [['name', 'handle'], 'string', 'max' => 255];
+        $rules[] = [
+            ['handle'],
+            HandleValidator::class,
+            'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']
+        ];
+        $rules[] = [
+            ['name'],
+            UniqueValidator::class,
+            'targetClass' => EntryTypeRecord::class,
+            'targetAttribute' => ['name', 'sectionId'],
+            'comboNotUnique' => Craft::t('yii', '{attribute} "{value}" has already been taken.'),
+        ];
+        $rules[] = [
+            ['handle'],
+            UniqueValidator::class,
+            'targetClass' => EntryTypeRecord::class,
+            'targetAttribute' => ['handle', 'sectionId'],
+            'comboNotUnique' => Craft::t('yii', '{attribute} "{value}" has already been taken.'),
         ];
 
         if ($this->hasTitleField) {
@@ -131,17 +142,17 @@ class EntryType extends Model
      */
     public function __toString(): string
     {
-        return (string)$this->handle;
+        return (string)$this->handle ?: static::class;
     }
 
     /**
-     * Returns the entry’s CP edit URL.
+     * Returns the entry’s edit URL in the control panel.
      *
      * @return string
      */
     public function getCpEditUrl(): string
     {
-        return UrlHelper::cpUrl('settings/sections/'.$this->sectionId.'/entrytypes/'.$this->id);
+        return UrlHelper::cpUrl('settings/sections/' . $this->sectionId . '/entrytypes/' . $this->id);
     }
 
     /**
@@ -157,7 +168,7 @@ class EntryType extends Model
         }
 
         if (($section = Craft::$app->getSections()->getSectionById($this->sectionId)) === null) {
-            throw new InvalidConfigException('Invalid section ID: '.$this->sectionId);
+            throw new InvalidConfigException('Invalid section ID: ' . $this->sectionId);
         }
 
         return $section;

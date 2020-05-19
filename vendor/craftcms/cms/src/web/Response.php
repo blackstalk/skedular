@@ -13,27 +13,26 @@ use yii\web\HttpException;
 /**
  * @inheritdoc
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Response extends \yii\web\Response
 {
-    // Properties
-    // =========================================================================
+    /**
+     * @since 3.4.0
+     */
+    const FORMAT_CSV = 'csv';
 
     /**
      * @var bool whether the response has been prepared.
      */
     private $_isPrepared = false;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * Returns the Content-Type header (sans `charset=X`) that the response will most likely include.
      *
      * @return string|null
      */
-    public function getContentType(): string
+    public function getContentType()
     {
         // If the response hasn't been prepared yet, go with what the formatter is going to set
         if (!$this->_isPrepared) {
@@ -46,6 +45,8 @@ class Response extends \yii\web\Response
                     return 'application/json';
                 case self::FORMAT_JSONP:
                     return 'application/javascript';
+                case self::FORMAT_CSV:
+                    return 'text/csv';
             }
         }
 
@@ -70,9 +71,9 @@ class Response extends \yii\web\Response
     {
         $cacheTime = 31536000; // 1 year
         $this->getHeaders()
-            ->set('Expires', gmdate('D, d M Y H:i:s', time() + $cacheTime).' GMT')
+            ->set('Expires', gmdate('D, d M Y H:i:s', time() + $cacheTime) . ' GMT')
             ->set('Pragma', 'cache')
-            ->set('Cache-Control', 'max-age='.$cacheTime);
+            ->set('Cache-Control', 'max-age=' . $cacheTime);
 
         return $this;
     }
@@ -88,7 +89,7 @@ class Response extends \yii\web\Response
         $modifiedTime = filemtime($path);
 
         if ($modifiedTime) {
-            $this->getHeaders()->set('Last-Modified', gmdate('D, d M Y H:i:s', $modifiedTime).' GMT');
+            $this->getHeaders()->set('Last-Modified', gmdate('D, d M Y H:i:s', $modifiedTime) . ' GMT');
         }
 
         return $this;
@@ -127,6 +128,7 @@ class Response extends \yii\web\Response
 
     /**
      * Attempts to closes the connection with the HTTP client, without ending PHP script execution.
+     *
      * This method relies on [flush()](http://php.net/manual/en/function.flush.php), which may not actually work if
      * mod_deflate or mod_gzip is installed, or if this is a Win32 server.
      *
@@ -140,6 +142,9 @@ class Response extends \yii\web\Response
             return;
         }
 
+        // Get the active user before headers are sent
+        Craft::$app->getUser()->getIdentity();
+
         // Prevent the script from ending when the browser closes the connection
         ignore_user_abort(true);
 
@@ -150,7 +155,7 @@ class Response extends \yii\web\Response
             $obContent = @ob_get_clean();
 
             if ($obContent !== false) {
-                $this->content = $obContent.$this->content;
+                $this->content = $obContent . $this->content;
             } else {
                 break;
             }
@@ -173,8 +178,18 @@ class Response extends \yii\web\Response
         }
     }
 
-    // Protected Methods
-    // =========================================================================
+    /**
+     * @inheritdoc
+     * @since 3.4.0
+     */
+    protected function defaultFormatters()
+    {
+        $formatters = parent::defaultFormatters();
+        $formatters[self::FORMAT_CSV] = [
+            'class' => CsvResponseFormatter::class,
+        ];
+        return $formatters;
+    }
 
     /**
      * @inheritdoc
@@ -187,11 +202,9 @@ class Response extends \yii\web\Response
         return $return;
     }
 
-    // Private Methods
-    // =========================================================================
-
     /**
      * Clear the output buffer to prevent corrupt downloads.
+     *
      * Need to check the OB status first, or else some PHP versions will throw an E_NOTICE
      * since we have a custom error handler (http://pear.php.net/bugs/bug.php?id=9670).
      */

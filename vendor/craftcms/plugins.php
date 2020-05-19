@@ -1,6 +1,7 @@
 <?php
 
 $vendorDir = dirname(__DIR__);
+$rootDir = dirname(dirname(__DIR__));
 
 return array (
   'craftcms/element-api' => 
@@ -13,12 +14,12 @@ return array (
       '@craft/elementapi' => $vendorDir . '/craftcms/element-api/src',
     ),
     'name' => 'Element API',
-    'version' => '2.5.2',
+    'version' => '2.6.0',
     'description' => 'Create a JSON API for your elements in Craft',
     'developer' => 'Pixel & Tonic',
     'developerUrl' => 'https://pixelandtonic.com/',
-    'changelogUrl' => 'https://raw.githubusercontent.com/craftcms/element-api/v2/CHANGELOG.md',
-    'downloadUrl' => 'https://github.com/craftcms/element-api/archive/v2.zip',
+    'developerEmail' => 'support@craftcms.com',
+    'documentationUrl' => 'https://github.com/craftcms/element-api/blob/v2/README.md',
   ),
   'craftcms/redactor' => 
   array (
@@ -30,11 +31,11 @@ return array (
       '@craft/redactor' => $vendorDir . '/craftcms/redactor/src',
     ),
     'name' => 'Redactor',
-    'version' => '1.0.1',
+    'version' => '2.6.1',
     'description' => 'Edit rich text content in Craft CMS using Redactor by Imperavi.',
     'developer' => 'Pixel & Tonic',
     'developerUrl' => 'https://pixelandtonic.com/',
-    'changelogUrl' => 'https://raw.githubusercontent.com/craftcms/redactor/master/CHANGELOG.md',
-    'downloadUrl' => 'https://github.com/craftcms/redactor/archive/master.zip',
+    'developerEmail' => 'support@craftcms.com',
+    'documentationUrl' => 'https://github.com/craftcms/redactor/blob/v2/README.md',
   ),
 );

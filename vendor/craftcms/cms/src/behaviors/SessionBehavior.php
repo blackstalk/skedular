@@ -18,13 +18,10 @@ use yii\web\AssetBundle;
  *
  * @property Session $owner
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class SessionBehavior extends Behavior
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var string|null The session variable name used to store the authorization keys for the current session.
      * @see authorize()
@@ -43,16 +40,14 @@ class SessionBehavior extends Behavior
      */
     public $jsFlashKey = '__js';
 
-    // Public Methods
-    // =========================================================================
-
     // Flash Data
     // -------------------------------------------------------------------------
 
     /**
      * Stores a notice in the user’s flash data.
+     *
      * The message will be stored on the session, and can be retrieved by calling
-     * [[getFlash()|<code>getFlash('notice')</code>]] or [[getAllFlashes()]].
+     * [[getFlash()|`getFlash('notice')`]] or [[getAllFlashes()]].
      * Only one flash notice can be stored at a time.
      *
      * @param string $message The message.
@@ -64,8 +59,9 @@ class SessionBehavior extends Behavior
 
     /**
      * Stores an error message in the user’s flash data.
+     *
      * The message will be stored on the session, and can be retrieved by calling
-     * [[getFlash()|<code>getFlash('error')</code>]] or [[getAllFlashes()]].
+     * [[getFlash()|`getFlash('error')`]] or [[getAllFlashes()]].
      * Only one flash error message can be stored at a time.
      *
      * @param string $message The message.
@@ -77,6 +73,7 @@ class SessionBehavior extends Behavior
 
     /**
      * Queues up an asset bundle to be registered on a future request.
+     *
      * Asset bundles that were queued with this method can be registered using [[getAssetBundleFlashes()]] or
      * [[\craft\web\View::getBodyHtml()]].
      *

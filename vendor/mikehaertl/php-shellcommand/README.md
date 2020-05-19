@@ -9,6 +9,20 @@ php-shellcommand
 
 php-shellcommand provides a simple object oriented interface to execute shell commands.
 
+## Installing
+
+### Prerequisites
+
+Your php version must be `5.4` or later.
+
+### Installing with composer
+
+This package can be installed easily using composer.
+
+```
+composer require mikehaertl/php-shellcommand
+```
+
 ## Features
 
  * Catches `stdOut`, `stdErr` and `exitCode`
@@ -58,6 +72,9 @@ $command->addArg('--name=', "d'Artagnan");
 // Add argument with several values
 // results in --keys key1 key2
 $command->addArg('--keys', array('key1','key2'));
+
+// Add string to pipe to command on standard input
+$command->setStdIn('string');
 ```
 
 ## API
@@ -76,6 +93,14 @@ $command->addArg('--keys', array('key1','key2'));
     PHP working dir.
  * `$procEnv`: An array with environment variables to pass to `proc_open()`. Default is `null` for none.
  * `$procOptions`: An array of `other_options` for `proc_open()`. Default is `null` for none.
+ * `$nonBlockingMode`: Whether to set the stdin/stdout/stderr streams to non-blocking
+    mode when `proc_open()` is used. This allows to have huge inputs/outputs
+    without making the process hang. The default is `null` which will enable
+    the feature on Non-Windows systems. Set it to `true` or `false` to manually
+    enable/disable it. Note that it doesn't work on Windows.
+ * `$timeout`: The time in seconds after which the command should be
+    terminated. This only works in non-blocking mode. Default is `null` which
+    means the process is never terminated.
  * `$locale`: The locale to (temporarily) set with `setlocale()` before running the command.
    This can be set to e.g. `en_US.UTF-8` if you have issues with UTF-8 encoded arguments.
 
@@ -108,6 +133,7 @@ pass `command`, `execCommand` and `args` as options. This will call the respecti
        An array can be passed to add more than one value for a key, e.g. `addArg('--exclude', array('val1','val2'))`
        which will create the option "--exclude 'val1' 'val2'".
     * `$escape`: If set, this overrides the `$escapeArgs` setting and enforces escaping/no escaping
+ * `setStdIn()`: String or resource to supply to command via standard input.
  * `getOutput()`: The command output as string. Empty if none.
  * `getError()`: The error message, either stderr or internal message. Empty if no error.
  * `getStdErr()`: The stderr output. Empty if none.

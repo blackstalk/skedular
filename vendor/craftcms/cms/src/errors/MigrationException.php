@@ -14,7 +14,7 @@ use yii\db\Migration;
  * MigrationException represents an exception thrown while executing a migration.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class MigrationException extends Exception
 {
@@ -43,7 +43,7 @@ class MigrationException extends Exception
         $this->output = $output;
 
         if ($message === null) {
-            $message = 'An error occurred while executing the "'.get_class($migration).' migration'.($previous ? ': '.$previous->getMessage() : '.');
+            $message = 'An error occurred while executing the "' . get_class($migration) . ' migration' . ($previous ? ': ' . $previous->getMessage() : '.');
         }
 
         parent::__construct($message, $code, $previous);

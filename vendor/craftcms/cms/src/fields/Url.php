@@ -19,13 +19,10 @@ use yii\db\Schema;
  * Url represents a URL field.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Url extends Field implements PreviewableFieldInterface
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -34,15 +31,71 @@ class Url extends Field implements PreviewableFieldInterface
         return Craft::t('app', 'URL');
     }
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public static function valueType(): string
+    {
+        return 'string|null';
+    }
+
+    /**
+     * @var string|null The input’s placeholder text
+     */
+    public $placeholder;
+
+    /**
+     * @var int The maximum length (in bytes) the field can hold
+     */
+    public $maxLength = 255;
+
+    /**
+     * @inheritdoc
+     */
+    protected function defineRules(): array
+    {
+        $rules = parent::defineRules();
+        $rules[] = [['maxLength'], 'required'];
+        $rules[] = [['maxLength'], 'number', 'integerOnly' => true, 'min' => 10];
+        return $rules;
+    }
 
     /**
      * @inheritdoc
      */
     public function getContentColumnType(): string
     {
-        return Schema::TYPE_STRING;
+        return Schema::TYPE_STRING . "({$this->maxLength})";
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getSettingsHtml()
+    {
+        return Craft::$app->getView()->renderTemplateMacro('_includes/forms', 'textField', [
+                [
+                    'label' => Craft::t('app', 'Placeholder Text'),
+                    'instructions' => Craft::t('app', 'The text that will be shown if the field doesn’t have a value.'),
+                    'id' => 'placeholder',
+                    'name' => 'placeholder',
+                    'value' => $this->placeholder,
+                    'errors' => $this->getErrors('placeholder'),
+                ]
+            ]) .
+            Craft::$app->getView()->renderTemplateMacro('_includes/forms', 'textField', [
+                [
+                    'label' => Craft::t('app', 'Max Length'),
+                    'instructions' => Craft::t('app', 'The maximum length (in bytes) the field can hold.'),
+                    'id' => 'maxLength',
+                    'name' => 'maxLength',
+                    'type' => 'number',
+                    'min' => '10',
+                    'step' => '10',
+                    'value' => $this->maxLength,
+                    'errors' => $this->getErrors('maxLength'),
+                ]
+            ]);
     }
 
     /**
@@ -54,6 +107,7 @@ class Url extends Field implements PreviewableFieldInterface
             'type' => 'url',
             'id' => $this->handle,
             'name' => $this->handle,
+            'placeholder' => Craft::t('site', $this->placeholder),
             'value' => $value,
         ]);
     }
@@ -64,6 +118,7 @@ class Url extends Field implements PreviewableFieldInterface
     public function getElementValidationRules(): array
     {
         return [
+            ['trim'],
             [UrlValidator::class],
         ];
     }

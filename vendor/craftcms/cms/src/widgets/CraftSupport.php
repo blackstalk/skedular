@@ -18,13 +18,10 @@ use craft\web\assets\craftsupport\CraftSupportAsset;
  * CraftSupport represents a Craft Support dashboard widget.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class CraftSupport extends Widget
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -53,13 +50,18 @@ class CraftSupport extends Widget
     /**
      * @inheritdoc
      */
-    public static function iconPath()
+    public static function icon()
     {
         return Craft::getAlias('@app/icons/buoey.svg');
     }
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public function getTitle(): string
+    {
+        return '';
+    }
 
     /**
      * @inheritdoc
@@ -72,12 +74,12 @@ class CraftSupport extends Widget
         }
 
         $view = Craft::$app->getView();
-        $view->registerAssetBundle(CraftSupportAsset::class);
+        $assetBundle = $view->registerAssetBundle(CraftSupportAsset::class);
 
         $plugins = '';
         foreach (Craft::$app->getPlugins()->getAllPlugins() as $plugin) {
             /** @var Plugin $plugin */
-            $plugins .= "\n    - ".$plugin->name.' '.$plugin->getVersion();
+            $plugins .= "\n    - " . $plugin->name . ' ' . $plugin->getVersion();
         }
 
         $db = Craft::$app->getDb();
@@ -95,10 +97,11 @@ class CraftSupport extends Widget
         }
 
         $envInfoJs = Json::encode([
-            'Craft version' => Craft::$app->getVersion().' ('.Craft::$app->getEditionName().')',
+            'Craft version' => Craft::$app->getVersion() . ' (' . Craft::$app->getEditionName() . ')',
             'PHP version' => App::phpVersion(),
-            'Database driver & version' => $dbDriver.' '.$db->getVersion(),
-            'Image driver & version' => $imageDriver.' '.$imagesService->getVersion(),
+            'OS version' => PHP_OS . ' ' . php_uname('r'),
+            'Database driver & version' => $dbDriver . ' ' . $db->getVersion(),
+            'Image driver & version' => $imageDriver . ' ' . $imagesService->getVersion(),
             'Plugins & versions' => $plugins,
         ]);
 
@@ -112,11 +115,12 @@ class CraftSupport extends Widget
 
         return $view->renderTemplate('_components/widgets/CraftSupport/body', [
             'widget' => $this,
-            'buoeyIcon' => file_get_contents($iconsDir.'/buoey.svg'),
-            'bullhornIcon' => file_get_contents($iconsDir.'/bullhorn.svg'),
-            'seIcon' => file_get_contents($iconsDir.'/craft-stack-exchange.svg'),
-            'ghIcon' => file_get_contents($iconsDir.'/github.svg'),
-            'showBackupOption' => $showBackupOption
+            'buoeyIcon' => file_get_contents($iconsDir . '/buoey.svg'),
+            'bullhornIcon' => file_get_contents($iconsDir . '/bullhorn.svg'),
+            'seIcon' => file_get_contents($iconsDir . '/craft-stack-exchange.svg'),
+            'ghIcon' => file_get_contents($iconsDir . '/github.svg'),
+            'showBackupOption' => $showBackupOption,
+            'bundleUrl' => $assetBundle->baseUrl,
         ]);
     }
 }

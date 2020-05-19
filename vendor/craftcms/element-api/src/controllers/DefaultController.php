@@ -1,10 +1,9 @@
 <?php
 /**
  * Element API plugin for Craft CMS 3.x
- *
  * Create a JSON API for your elements in Craft.
  *
- * @link      https://pixelandtonic.com/
+ * @link https://pixelandtonic.com/
  * @copyright Copyright (c) 2017 Pixel &amp; Tonic
  */
 
@@ -33,7 +32,7 @@ use yii\web\Response;
  * Element API controller.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since  2.0
+ * @since 2.0
  */
 class DefaultController extends Controller
 {
@@ -60,7 +59,6 @@ class DefaultController extends Controller
      * Returns the requested elements as JSON.
      *
      * @param string $pattern The endpoint URL pattern that was matched
-     *
      * @return Response
      * @throws InvalidConfigException
      * @throws NotFoundHttpException
@@ -69,6 +67,7 @@ class DefaultController extends Controller
     {
         /** @var Response $response */
         $response = Craft::$app->getResponse();
+        $callback = null;
         $jsonOptions = null;
         $pretty = false;
         $cache = false;
@@ -79,17 +78,23 @@ class DefaultController extends Controller
             $plugin = Plugin::getInstance();
             $config = $plugin->getEndpoint($pattern);
             $request = Craft::$app->getRequest();
+            $siteId = Craft::$app->getSites()->getCurrentSite()->id;
 
             if (is_callable($config)) {
                 $params = Craft::$app->getUrlManager()->getRouteParams();
                 $config = $this->_callWithParams($config, $params);
             }
 
+            if (is_array($config)) {
+                // Merge in the defaults
+                $config = array_merge($plugin->getDefaultResourceAdapterConfig(), $config);
+            }
+
             // Before anything else, check the cache
             $cache = ArrayHelper::remove($config, 'cache', false);
 
             if ($cache) {
-                $cacheKey = 'elementapi:'.$request->getPathInfo().':'.$request->getQueryStringWithoutPath();
+                $cacheKey = 'elementapi:'.$siteId.':'.$request->getPathInfo().':'.$request->getQueryStringWithoutPath();
                 $cacheService = Craft::$app->getCache();
 
                 if (($cachedContent = $cacheService->get($cacheKey)) !== false) {
@@ -103,14 +108,16 @@ class DefaultController extends Controller
                 }
             }
 
-            // Does the config specify the serializer?
-            $serializer = is_array($config) ? ArrayHelper::remove($config, 'serializer') : null;
-
             // Extract config settings that aren't meant for createResource()
-            $jsonOptions = (is_array($config) ? ArrayHelper::remove($config, 'jsonOptions') : null) ?? JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
-            $pretty = (is_array($config) ? ArrayHelper::remove($config, 'pretty') : null) ?? false;
-            $includes = (is_array($config) ? ArrayHelper::remove($config, 'includes') : null) ?? [];
-            $excludes = (is_array($config) ? ArrayHelper::remove($config, 'excludes') : null) ?? [];
+            $serializer = ArrayHelper::remove($config, 'serializer');
+            $callback = ArrayHelper::remove($config, 'callback');
+            $jsonOptions = ArrayHelper::remove($config, 'jsonOptions', JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $pretty = ArrayHelper::remove($config, 'pretty', false);
+            $includes = ArrayHelper::remove($config, 'includes', []);
+            $excludes = ArrayHelper::remove($config, 'excludes', []);
+
+            // Generate all transforms immediately
+            Craft::$app->getConfig()->getGeneral()->generateTransformsBeforePageLoad = true;
 
             // Get the data resource
             try {
@@ -168,12 +175,21 @@ class DefaultController extends Controller
 
         // Create a JSON response formatter with custom options
         $formatter = new JsonResponseFormatter([
+            'useJsonp' => $callback !== null,
             'encodeOptions' => $jsonOptions,
             'prettyPrint' => $pretty,
         ]);
 
         // Manually format the response ahead of time, so we can access and cache the JSON
-        $response->data = $data;
+        if ($callback !== null) {
+            $response->data = [
+                'data' => $data,
+                'callback' => $callback,
+            ];
+        } else {
+            $response->data = $data;
+        }
+
         $formatter->format($response);
         $response->data = null;
         $response->format = Response::FORMAT_RAW;
@@ -201,9 +217,8 @@ class DefaultController extends Controller
     /**
      * Calls a given function. If any params are given, they will be mapped to the function's arguments.
      *
-     * @param callable $func   The function to call
-     * @param array    $params Any params that should be mapped to function arguments
-     *
+     * @param callable $func The function to call
+     * @param array $params Any params that should be mapped to function arguments
      * @return mixed The result of the function
      */
     private function _callWithParams($func, $params)

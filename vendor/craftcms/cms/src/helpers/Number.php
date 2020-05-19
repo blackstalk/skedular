@@ -13,13 +13,10 @@ use Craft;
  * Class Number
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Number
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * Returns the "word" version of a number
      *
@@ -61,7 +58,7 @@ class Number
 
         while ($num >= 0) {
             $ascii = ($num % 26) + 65;
-            $alpha = chr($ascii).$alpha;
+            $alpha = chr($ascii) . $alpha;
 
             $num = (int)($num / 26) - 1;
         }
@@ -79,7 +76,7 @@ class Number
     {
         $alpha = static::upperAlpha($num);
 
-        return StringHelper::toLowerCase($alpha);
+        return mb_strtolower($alpha);
     }
 
     /**
@@ -128,11 +125,12 @@ class Number
     {
         $roman = static::upperRoman($num);
 
-        return StringHelper::toLowerCase($roman);
+        return mb_strtolower($roman);
     }
 
     /**
      * Returns the numeric value of a variable.
+     *
      * If the variable is an object with a __toString() method, the numeric value of its string representation will be
      * returned.
      *

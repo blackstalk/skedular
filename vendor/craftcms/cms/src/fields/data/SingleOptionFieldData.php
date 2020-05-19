@@ -11,25 +11,19 @@ namespace craft\fields\data;
  * Single-select option field data class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class SingleOptionFieldData extends OptionData
 {
-    // Properties
-    // =========================================================================
-
     /**
-     * @var array
+     * @var OptionData[]
      */
     private $_options = [];
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Returns the options.
      *
-     * @return array
+     * @return OptionData[]
      */
     public function getOptions(): array
     {
@@ -39,7 +33,7 @@ class SingleOptionFieldData extends OptionData
     /**
      * Sets the options.
      *
-     * @param array $options
+     * @param OptionData[] $options
      */
     public function setOptions(array $options)
     {

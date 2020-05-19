@@ -9,14 +9,15 @@ namespace craft\feeds;
 
 use Craft;
 use GuzzleHttp\ClientInterface as GuzzleClientInterface;
-use Zend\Feed\Reader\Http\ClientInterface as FeedReaderHttpClientInterface;
-use Zend\Feed\Reader\Http\Psr7ResponseDecorator;
+use Laminas\Feed\Reader\Http\ClientInterface as FeedReaderHttpClientInterface;
+use Laminas\Feed\Reader\Http\Psr7ResponseDecorator;
+use Laminas\Feed\Reader\Http\ResponseInterface;
 
 /**
  * PSR-7 Guzzle client for the Feeds service.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class GuzzleClient implements FeedReaderHttpClientInterface
 {
@@ -34,7 +35,10 @@ class GuzzleClient implements FeedReaderHttpClientInterface
     }
 
     /**
-     * {@inheritdoc}
+     * Make a GET request to a given URI
+     *
+     * @param string $uri
+     * @return ResponseInterface
      */
     public function get($uri)
     {

@@ -22,7 +22,7 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
             for (var i = 0; i < Craft.publishableSections.length; i++) {
                 var section = Craft.publishableSections[i];
 
-                if (this.getSourceByKey('section:' + section.id)) {
+                if (this.getSourceByKey('section:' + section.uid)) {
                     this.publishableSections.push(section);
                 }
             }
@@ -94,7 +94,7 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
                 // If they are, show a primary "New entry" button, and a dropdown of the other sections (if any).
                 // Otherwise only show a menu button
                 if (selectedSection) {
-                    href = this._getSectionTriggerHref(selectedSection, true);
+                    href = this._getSectionTriggerHref(selectedSection);
                     label = (this.settings.context === 'index' ? Craft.t('app', 'New entry') : Craft.t('app', 'New {section} entry', {section: selectedSection.name}));
                     this.$newEntryBtn = $('<a class="btn submit add icon" ' + href + '>' + Craft.escapeHtml(label) + '</a>').appendTo(this.$newEntryBtnGroup);
 
@@ -118,10 +118,13 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
                     for (i = 0; i < this.publishableSections.length; i++) {
                         var section = this.publishableSections[i];
 
-                        if (this.settings.context === 'index' || section !== selectedSection) {
+                        if (
+                            (this.settings.context === 'index' && $.inArray(this.siteId, section.sites) !== -1) ||
+                            (this.settings.context !== 'index' && section !== selectedSection)
+                        ) {
                             href = this._getSectionTriggerHref(section);
                             label = (this.settings.context === 'index' ? section.name : Craft.t('app', 'New {section} entry', {section: section.name}));
-                            menuHtml += '<li><a ' + href + '">' + Craft.escapeHtml(label) + '</a></li>';
+                            menuHtml += '<li><a ' + href + '>' + Craft.escapeHtml(label) + '</a></li>';
                         }
                     }
 
@@ -154,19 +157,19 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
             }
         },
 
-        _getSectionTriggerHref: function(section, includeSite) {
+        _getSectionTriggerHref: function(section) {
             if (this.settings.context === 'index') {
                 var uri = 'entries/' + section.handle + '/new';
-                if (includeSite && this.siteId && this.siteId != Craft.primarySiteId) {
+                let params = {};
+                if (this.siteId) {
                     for (var i = 0; i < Craft.sites.length; i++) {
                         if (Craft.sites[i].id == this.siteId) {
-                            uri += '/'+Craft.sites[i].handle;
+                            params.site = Craft.sites[i].handle;
                         }
                     }
                 }
-                return 'href="' + Craft.getUrl(uri) + '"';
-            }
-            else {
+                return 'href="' + Craft.getUrl(uri, params) + '"';
+            } else {
                 return 'data-id="' + section.id + '"';
             }
         },
@@ -196,11 +199,11 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
 
             Craft.createElementEditor(this.elementType, {
                 hudTrigger: this.$newEntryBtnGroup,
-                elementType: 'craft\\elements\\Entry',
                 siteId: this.siteId,
                 attributes: {
                     sectionId: sectionId,
-                    typeId: section.entryTypes[0].id
+                    typeId: section.entryTypes[0].id,
+                    enabled: section.canPublish ? 1 : 0,
                 },
                 onBeginLoading: $.proxy(function() {
                     this.$newEntryBtn.addClass('loading');
@@ -213,7 +216,7 @@ Craft.EntryIndex = Craft.BaseElementIndex.extend(
                 }, this),
                 onSaveElement: $.proxy(function(response) {
                     // Make sure the right section is selected
-                    var sectionSourceKey = 'section:' + sectionId;
+                    var sectionSourceKey = 'section:' + section.uid;
 
                     if (this.sourceKey !== sectionSourceKey) {
                         this.selectSourceByKey(sectionSourceKey);

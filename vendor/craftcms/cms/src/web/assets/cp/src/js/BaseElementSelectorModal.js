@@ -129,8 +129,9 @@ Craft.BaseElementSelectorModal = Garnish.Modal.extend(
 
             for (var i = 0; i < $selectedElements.length; i++) {
                 var $element = $($selectedElements[i]);
+                var elementInfo = Craft.getElementInfo($element);
 
-                info.push(Craft.getElementInfo($element));
+                info.push(elementInfo);
             }
 
             return info;
@@ -192,7 +193,9 @@ Craft.BaseElementSelectorModal = Garnish.Modal.extend(
                         multiSelect: this.settings.multiSelect,
                         buttonContainer: this.$secondaryButtons,
                         onSelectionChange: $.proxy(this, 'onSelectionChange'),
-                        hideSidebar: this.settings.hideSidebar
+                        hideSidebar: this.settings.hideSidebar,
+                        defaultSiteId: this.settings.defaultSiteId,
+                        defaultSource: this.settings.defaultSource
                     });
 
                     // Double-clicking or double-tapping should select the elements
@@ -204,7 +207,6 @@ Craft.BaseElementSelectorModal = Garnish.Modal.extend(
                         }
                     });
                 }
-
             }, this));
         }
     },
@@ -221,6 +223,8 @@ Craft.BaseElementSelectorModal = Garnish.Modal.extend(
             hideOnSelect: true,
             onCancel: $.noop,
             onSelect: $.noop,
-            hideIndexSidebar: false
+            hideSidebar: false,
+            defaultSiteId: null,
+            defaultSource: null
         }
     });

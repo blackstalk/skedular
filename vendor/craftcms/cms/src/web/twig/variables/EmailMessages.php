@@ -10,20 +10,17 @@ namespace craft\web\twig\variables;
 use Craft;
 use craft\models\SystemMessage;
 
-Craft::$app->requireEdition(Craft::Client);
+Craft::$app->requireEdition(Craft::Pro);
 
 /**
  * Email functions.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
- * @deprecated in 3.0
+ * @since 3.0.0
+ * @deprecated in 3.0.0
  */
 class EmailMessages
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * Returns all of the system email messages.
      *

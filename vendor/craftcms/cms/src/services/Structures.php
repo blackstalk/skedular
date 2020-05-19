@@ -11,6 +11,7 @@ use Craft;
 use craft\base\Element;
 use craft\base\ElementInterface;
 use craft\db\Query;
+use craft\db\Table;
 use craft\errors\StructureNotFoundException;
 use craft\events\MoveElementEvent;
 use craft\models\Structure;
@@ -21,16 +22,13 @@ use yii\base\Exception;
 
 /**
  * Structures service.
- * An instance of the Structures service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getStructures()|<code>Craft::$app->structures</code>]].
+ * An instance of the Structures service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getStructures()|`Craft::$app->structures`]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Structures extends Component
 {
-    // Constants
-    // =========================================================================
-
     /**
      * @event MoveElementEvent The event that is triggered before an element is moved.
      */
@@ -41,16 +39,16 @@ class Structures extends Component
      */
     const EVENT_AFTER_MOVE_ELEMENT = 'afterMoveElement';
 
-    // Properties
-    // =========================================================================
+    /**
+     * @var int The timeout to pass to [[\yii\mutex\Mutex::acquire()]] when acquiring a lock on the structure.
+     * @since 3.0.19
+     */
+    public $mutexTimeout = 0;
 
     /**
      * @var
      */
     private $_rootElementRecordsByStructureId;
-
-    // Public Methods
-    // =========================================================================
 
     // Structure CRUD
     // -------------------------------------------------------------------------
@@ -59,19 +57,51 @@ class Structures extends Component
      * Returns a structure by its ID.
      *
      * @param int $structureId
+     * @param bool $withTrashed
      * @return Structure|null
      */
-    public function getStructureById(int $structureId)
+    public function getStructureById(int $structureId, bool $withTrashed = false)
     {
-        $result = (new Query())
+        $query = (new Query())
             ->select([
                 'id',
                 'maxLevels',
+                'uid'
             ])
-            ->from(['{{%structures}}'])
-            ->where(['id' => $structureId])
-            ->one();
+            ->from([Table::STRUCTURES])
+            ->where(['id' => $structureId]);
 
+        if (!$withTrashed) {
+            $query->andWhere(['dateDeleted' => null]);
+        }
+
+        $result = $query->one();
+        return $result ? new Structure($result) : null;
+    }
+
+    /**
+     * Returns a structure by its UID.
+     *
+     * @param string $structureUid
+     * @param bool $withTrashed
+     * @return Structure|null
+     */
+    public function getStructureByUid(string $structureUid, bool $withTrashed = false)
+    {
+        $query = (new Query())
+            ->select([
+                'id',
+                'maxLevels',
+                'uid'
+            ])
+            ->from([Table::STRUCTURES])
+            ->where(['uid' => $structureUid]);
+
+        if (!$withTrashed) {
+            $query->andWhere(['dateDeleted' => null]);
+        }
+
+        $result = $query->one();
         return $result ? new Structure($result) : null;
     }
 
@@ -85,7 +115,9 @@ class Structures extends Component
     public function saveStructure(Structure $structure): bool
     {
         if ($structure->id) {
-            $structureRecord = StructureRecord::findOne($structure->id);
+            $structureRecord = StructureRecord::findWithTrashed()
+                ->andWhere(['id' => $structure->id])
+                ->one();
 
             if (!$structureRecord) {
                 throw new StructureNotFoundException("No structure exists with the ID '{$structure->id}'");
@@ -95,8 +127,13 @@ class Structures extends Component
         }
 
         $structureRecord->maxLevels = $structure->maxLevels;
+        $structureRecord->uid = $structure->uid;
 
-        $success = $structureRecord->save();
+        if ($structureRecord->dateDeleted) {
+            $success = $structureRecord->restore();
+        } else {
+            $success = $structureRecord->save();
+        }
 
         if ($success) {
             $structure->id = $structureRecord->id;
@@ -120,11 +157,9 @@ class Structures extends Component
         }
 
         $affectedRows = Craft::$app->getDb()->createCommand()
-            ->delete(
-                '{{%structures}}',
-                [
-                    'id' => $structureId
-                ])
+            ->softDelete(Table::STRUCTURES, [
+                'id' => $structureId
+            ])
             ->execute();
 
         return (bool)$affectedRows;
@@ -280,9 +315,6 @@ class Structures extends Component
         return $this->_doIt($structureId, $element, $prevElementRecord, 'insertAfter', $mode);
     }
 
-    // Private Methods
-    // =========================================================================
-
     /**
      * Returns a structure element record from given structure and element IDs.
      *
@@ -345,6 +377,13 @@ class Structures extends Component
      */
     private function _doIt($structureId, ElementInterface $element, StructureElement $targetElementRecord, $action, $mode): bool
     {
+        // Get a lock or bust
+        $lockName = 'structure:' . $structureId;
+        $mutex = Craft::$app->getMutex();
+        if (!$mutex->acquire($lockName, $this->mutexTimeout)) {
+            throw new Exception('Unable to acquire a lock for the structure ' . $structureId);
+        }
+
         $elementRecord = null;
 
         /** @var Element $element */
@@ -376,6 +415,7 @@ class Structures extends Component
 
         // Tell the element about it
         if (!$element->beforeMoveInStructure($structureId)) {
+            $mutex->release($lockName);
             return false;
         }
 
@@ -383,7 +423,7 @@ class Structures extends Component
         try {
             if (!$elementRecord->$action($targetElementRecord)) {
                 $transaction->rollBack();
-
+                $mutex->release($lockName);
                 return false;
             }
 
@@ -391,7 +431,7 @@ class Structures extends Component
             // todo: we should be able to pull these from $elementRecord - https://github.com/creocoder/yii2-nested-sets/issues/114
             $values = (new Query())
                 ->select(['root', 'lft', 'rgt', 'level'])
-                ->from('{{%structureelements}}')
+                ->from(Table::STRUCTUREELEMENTS)
                 ->where([
                     'structureId' => $structureId,
                     'elementId' => $element->id,
@@ -409,9 +449,11 @@ class Structures extends Component
             $transaction->commit();
         } catch (\Throwable $e) {
             $transaction->rollBack();
-
+            $mutex->release($lockName);
             throw $e;
         }
+
+        $mutex->release($lockName);
 
         if ($mode === 'update' && $this->hasEventHandlers(self::EVENT_AFTER_MOVE_ELEMENT)) {
             // Fire an 'afterMoveElement' event

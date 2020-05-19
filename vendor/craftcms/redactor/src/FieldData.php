@@ -1,21 +1,22 @@
 <?php
 /**
- * @link      https://craftcms.com/
+ * @link https://craftcms.com/
  * @copyright Copyright (c) Pixel & Tonic, Inc.
- * @license   MIT
+ * @license MIT
  */
 
 namespace craft\redactor;
 
 use Craft;
+use Twig\Markup;
 
 /**
  * Stores the data for Redactor fields.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since  3.0
+ * @since 3.0
  */
-class FieldData extends \Twig_Markup
+class FieldData extends Markup
 {
     // Properties
     // =========================================================================
@@ -26,7 +27,7 @@ class FieldData extends \Twig_Markup
     private $_pages;
 
     /**
-     * @var string|null
+     * @var string
      */
     private $_rawContent;
 
@@ -37,14 +38,15 @@ class FieldData extends \Twig_Markup
      * Constructor
      *
      * @param string $content
+     * @param int|null $siteId
      */
-    public function __construct(string $content)
+    public function __construct(string $content, int $siteId = null)
     {
         // Save the raw content in case we need it later
         $this->_rawContent = $content;
 
         // Parse the ref tags
-        $content = Craft::$app->getElements()->parseRefs($content);
+        $content = Craft::$app->getElements()->parseRefs($content, $siteId);
 
         parent::__construct($content, Craft::$app->charset);
     }
@@ -94,7 +96,6 @@ class FieldData extends \Twig_Markup
      * Returns a specific page.
      *
      * @param int $pageNumber
-     *
      * @return string|null
      */
     public function getPage(int $pageNumber)

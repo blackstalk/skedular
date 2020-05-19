@@ -8,6 +8,8 @@
 namespace craft\models;
 
 use Craft;
+use craft\base\Element;
+use craft\base\ElementInterface;
 use craft\base\Field;
 use craft\base\FieldInterface;
 use craft\base\Model;
@@ -18,13 +20,10 @@ use yii\base\InvalidConfigException;
  * FieldLayoutTab model class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class FieldLayoutTab extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -46,6 +45,11 @@ class FieldLayoutTab extends Model
     public $sortOrder;
 
     /**
+     * @var string|null UID
+     */
+    public $uid;
+
+    /**
      * @var FieldLayout|null
      */
     private $_layout;
@@ -55,19 +59,16 @@ class FieldLayoutTab extends Model
      */
     private $_fields;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        return [
-            [['id', 'layoutId'], 'number', 'integerOnly' => true],
-            [['name'], 'string', 'max' => 255],
-            [['sortOrder'], 'string', 'max' => 4],
-        ];
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'layoutId'], 'number', 'integerOnly' => true];
+        $rules[] = [['name'], 'string', 'max' => 255];
+        $rules[] = [['sortOrder'], 'string', 'max' => 4];
+        return $rules;
     }
 
     /**
@@ -87,7 +88,7 @@ class FieldLayoutTab extends Model
         }
 
         if (($this->_layout = Craft::$app->getFields()->getLayoutById($this->layoutId)) === null) {
-            throw new InvalidConfigException('Invalid layout ID: '.$this->layoutId);
+            throw new InvalidConfigException('Invalid layout ID: ' . $this->layoutId);
         }
 
         return $this->_layout;
@@ -145,6 +146,30 @@ class FieldLayoutTab extends Model
      */
     public function getHtmlId(): string
     {
-        return 'tab-'.StringHelper::toKebabCase($this->name);
+        return 'tab-' . StringHelper::toKebabCase($this->name);
+    }
+
+    /**
+     * Returns whether the given element has any validation errors within the fields in this tab.
+     *
+     * @param ElementInterface $element
+     * @return bool
+     * @since 3.4.0
+     */
+    public function elementHasErrors(ElementInterface $element): bool
+    {
+        /** @var Element $element */
+        if (!$element->hasErrors()) {
+            return false;
+        }
+
+        foreach ($this->getFields() as $field) {
+            /** @var Field $field */
+            if ($element->hasErrors("{$field->handle}.*")) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

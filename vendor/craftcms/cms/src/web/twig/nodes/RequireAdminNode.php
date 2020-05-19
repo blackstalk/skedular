@@ -8,25 +8,24 @@
 namespace craft\web\twig\nodes;
 
 use Craft;
+use Twig\Compiler;
+use Twig\Node\Node;
 
 /**
  * Class RequireAdminNode
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class RequireAdminNode extends \Twig_Node
+class RequireAdminNode extends Node
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
-    public function compile(\Twig_Compiler $compiler)
+    public function compile(Compiler $compiler)
     {
         $compiler
             ->addDebugInfo($this)
-            ->write(Craft::class."::\$app->controller->requireAdmin();\n");
+            ->write(Craft::class . "::\$app->controller->requireAdmin();\n");
     }
 }

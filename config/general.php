@@ -33,6 +33,7 @@ return [
         'preserveImageColorProfiles' => true,
         'imageDriver' => 'imagick',
         'generateTransformsBeforePageLoad' => true,
+        'autoLoginAfterAccountActivation' => true,
         // Base site URL
         'siteUrl' => getenv('BASE_URL')
     ],

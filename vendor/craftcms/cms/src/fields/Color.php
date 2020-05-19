@@ -20,13 +20,10 @@ use yii\db\Schema;
  * Color represents a Color field.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Color extends Field implements PreviewableFieldInterface
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -35,25 +32,28 @@ class Color extends Field implements PreviewableFieldInterface
         return Craft::t('app', 'Color');
     }
 
-    // Properties
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public static function valueType(): string
+    {
+        return ColorData::class . '|null';
+    }
 
     /**
      * @var string|null The default color hex
      */
     public $defaultColor;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     public function getContentColumnType(): string
     {
-        return Schema::TYPE_STRING.'(7)';
+        return Schema::TYPE_STRING . '(7)';
     }
 
+    /** @inheritdoc */
     public function getSettingsHtml()
     {
         return Craft::$app->getView()->renderTemplateMacro('_includes/forms.html', 'colorField', [
@@ -70,9 +70,9 @@ class Color extends Field implements PreviewableFieldInterface
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        $rules = parent::rules();
+        $rules = parent::defineRules();
         $rules[] = [['defaultColor'], ColorValidator::class];
         return $rules;
     }
@@ -95,16 +95,7 @@ class Color extends Field implements PreviewableFieldInterface
             return null;
         }
 
-        $value = strtolower($value);
-
-        if ($value[0] !== '#') {
-            $value = '#'.$value;
-        }
-
-        if (strlen($value) === 4) {
-            $value = '#'.$value[1].$value[1].$value[2].$value[2].$value[3].$value[3];
-        }
-
+        $value = ColorValidator::normalizeColor($value);
         return new ColorData($value);
     }
 
@@ -142,7 +133,7 @@ class Color extends Field implements PreviewableFieldInterface
         }
 
         return Html::encodeParams(
-            '<div class="color" style="cursor: default;"><div class="colorpreview" style="background-color: {bgColor};"></div></div><div class="colorhex code">{bgColor}</div>',
+            '<div class="color" style="cursor: default;"><div class="color-preview" style="background-color: {bgColor};"></div></div><div class="colorhex code">{bgColor}</div>',
             [
                 'bgColor' => $value->getHex()
             ]);
@@ -155,10 +146,10 @@ class Color extends Field implements PreviewableFieldInterface
     {
         /** @var ColorData|null $value */
         if (!$value) {
-            return '<div class="color small static"><div class="colorpreview"></div></div>';
+            return '<div class="color small static"><div class="color-preview"></div></div>';
         }
 
-        return "<div class='color small static'><div class='colorpreview' style='background-color: {$value->getHex()};'></div></div>".
+        return "<div class='color small static'><div class='color-preview' style='background-color: {$value->getHex()};'></div></div>" .
             "<div class='colorhex code'>{$value->getHex()}</div>";
     }
 }

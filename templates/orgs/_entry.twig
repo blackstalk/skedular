@@ -16,9 +16,101 @@
 {% extends "_layout" %}
 
 {% block main %}
+{% set currentTimezone = "America/Chicago" %}
+<div>
+{% if currentUser %}
+    <a href="{{ logoutUrl }}">Logout</a>
+{% else %}
+	<a href="{{ loginUrl }}">Login</a> | <a href="/sign-up">Sign Up</a>
+{% endif %}
+</div>
 	<article>
+
 		<h1>{{ entry.title }}</h1>
-		<p>Posted on {{ entry.postDate.format('F d, Y') }}</p>
+		<p>Today is {{ "now"|date("m/d/Y", currentTimezone) }}</p>
+		<p>{{ "now"|date("l", currentTimezone)|upper }}</p>
+		<hr/>
 		{{ entry.body }}
+		<hr/>
+		{% set blocks = entry.daysOfWeek.all() %}
+		{% for day in  0..6 %}
+			{% set myDate = '+' ~ day ~ ' day' %}
+			<div>
+			{% if blocks|length %}
+				{% for block in blocks %}
+					{% if block.type == "days" and block.timeSlots|length and  myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						{# {% if "now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						We are here
+						{% endif %}
+						{{ block.dayOfWeek|upper }}  #}
+						{% set dayReservations = 0 %}
+						{% set reservationIdsForThisDay = [] %}
+						{% for res in craft.entries({ section: 'reservations' }) %}
+							{# {{ myDate|date("F j, Y", currentTimezone) }}
+							{{ res.reservationDate|date("F j, Y", currentTimezone) }} #}
+							{% if res.reservationDate|date("F j, Y", currentTimezone) == myDate|date("F j, Y", currentTimezone) %}
+								{% set dayReservations = dayReservations + 1 %}
+								{% set reservationIdsForThisDay = reservationIdsForThisDay|merge([res.id]) %}
+							{% endif %}
+						{% endfor %}
+
+						Day: {{ myDate|date("l", currentTimezone)|upper }}<br/>
+						Date: {{ myDate|date("m/d/Y", currentTimezone) }}<br/>
+						Resevations: {{ dayReservations }}
+						<br/>	
+						----<br/>
+						<ul {{ ("now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper) ? 'class="current-day"' }}>
+							{% for slot in block.timeSlots %}
+								<li>
+									Start: {{ slot.startTime|date('g:i:s a', currentTimezone) }} -- End: {{ slot.endTime|date('g:i:s a', currentTimezone) }} 
+									
+									{% set reservationsIdsForTimeSlot = [] %}
+									{% set reservationUsersInfoForTimeSlot = [] %}
+									{% set userIsSignedUpForSlot = false %}
+									{% for resInIds in craft.entries({
+										section: 'reservations',
+										id: reservationIdsForThisDay
+									}) %}
+										{% if resInIds.reservationTime|date('g:i:s a', currentTimezone) == slot.startTime|date('g:i:s a', currentTimezone) %}
+											{% set reservationsIdsForTimeSlot = reservationsIdsForTimeSlot|merge([resInIds.id]) %}
+											{% set reservedUserInfo = {
+												userId: resInIds.reservedUser.one().id,
+												userName: resInIds.reservedUser.one().username
+											} %}
+											{% set userIsSignedUpForSlot = (currentUser.id == resInIds.reservedUser.one().id) ? true : false %}
+											{% set reservationUsersInfoForTimeSlot = reservationUsersInfoForTimeSlot|merge([reservedUserInfo]) %}
+										{% endif %}
+									{% endfor %}
+											<div>People Signed Up - {{ reservationsIdsForTimeSlot|length }}</div>
+											<div>People Allowed - {{ block.threshold }}</div>
+											<div>People Remaining - {{ (block.threshold - reservationsIdsForTimeSlot|length) ~ " of " ~ block.threshold }}</div>
+											{% if reservationUsersInfoForTimeSlot|length > 0 %}
+											<div>Names of people signed up - 
+													{% for userInfo in reservationUsersInfoForTimeSlot %}
+														{{ userInfo.userName }}{{ (loop.last) ? '' : ','}}
+													{% endfor %}
+											</div>
+											{% endif %}
+											{% if currentUser %}
+												{% if userIsSignedUpForSlot == true %}
+													<button disabled class="f6 link dim br-pill ba ph3 pv2 mb2 dib dark-green">You're signed up!</button>
+												{% else %}
+													<button class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-light-purple">Reserve A Spot</button>
+												{% endif %}
+											{% endif %}
+											<br/>
+											----
+								</li>
+							{% endfor %}
+						<ul>
+						<hr/>
+					{% elseif block.type == "days" and block.timeSlots|length < 1 and myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						{{ block.dayOfWeek|upper }} is closed
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+			</div>
+		{% endfor %}
+		
 	</article>
 {% endblock %}

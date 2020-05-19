@@ -15,13 +15,10 @@ use craft\helpers\StringHelper;
  * @inheritdoc
  * @property Connection $db Connection the DB connection that this command is associated with.
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Command extends \yii\db\Command
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      * @param string $table The table that new rows will be inserted into.
@@ -117,7 +114,9 @@ class Command extends \yii\db\Command
 
         // todo: hack for BC with our old upsert() method. Remove in Craft 4
         // Merge any updateColumn data into insertColumns
-        $insertColumns = array_merge($updateColumns, $insertColumns);
+        if (is_array($updateColumns)) {
+            $insertColumns = array_merge($updateColumns, $insertColumns);
+        }
 
         parent::upsert($table, $insertColumns, $updateColumns, $params);
         return $this;
@@ -135,7 +134,7 @@ class Command extends \yii\db\Command
      */
     public function update($table, $columns, $condition = '', $params = [], $includeAuditColumns = true)
     {
-        if ($includeAuditColumns) {
+        if ($includeAuditColumns && !isset($columns['dateUpdated'])) {
             $columns['dateUpdated'] = Db::prepareDateForDb(new \DateTime());
         }
 
@@ -188,5 +187,39 @@ class Command extends \yii\db\Command
         $sql = $this->db->getQueryBuilder()->renameSequence($oldName, $newName);
 
         return $this->setSql($sql);
+    }
+
+    /**
+     * Creates a SQL statement for soft-deleting a row.
+     *
+     * @param string $table The table to be updated.
+     * @param string|array $condition The condition that will be put in the WHERE part. Please
+     * refer to [[Query::where()]] on how to specify condition.
+     * @param array $params The parameters to be bound to the command.
+     * @return static The command object itself.
+     * @since 3.1.0
+     */
+    public function softDelete(string $table, $condition = '', array $params = []): Command
+    {
+        return $this->update($table, [
+            'dateDeleted' => Db::prepareDateForDb(new \DateTime()),
+        ], $condition, $params, false);
+    }
+
+    /**
+     * Creates a SQL statement for restoring a soft-deleted row.
+     *
+     * @param string $table The table to be updated.
+     * @param string|array $condition The condition that will be put in the WHERE part. Please
+     * refer to [[Query::where()]] on how to specify condition.
+     * @param array $params The parameters to be bound to the command.
+     * @return static The command object itself.
+     * @since 3.1.0
+     */
+    public function restore(string $table, $condition = '', array $params = []): Command
+    {
+        return $this->update($table, [
+            'dateDeleted' => null,
+        ], $condition, $params, false);
     }
 }

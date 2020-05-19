@@ -1,46 +1,78 @@
 <template>
     <div>
-        <div :class="cssClass" v-if="plugins && plugins.length > 0">
-            <div class="ps-grid-box" v-for="plugin in plugins">
-                <plugin-card :plugin="plugin" @click="showPlugin(plugin)"></plugin-card>
+        <div class="ps-grid-plugins" v-if="plugins && plugins.length > 0">
+            <div class="ps-grid-box" v-for="(plugin, key) in computedPlugins" :key="key">
+                <plugin-card :plugin="plugin" @click="showPlugin(plugin)" :trialMode="trialMode"></plugin-card>
             </div>
         </div>
     </div>
 </template>
 
-
 <script>
-    import PluginCard from './PluginCard';
+    import PluginCard from './PluginCard'
 
     export default {
-
         components: {
             PluginCard,
         },
 
-        props: ['plugins', 'columns'],
+        props: ['plugins', 'trialMode', 'autoLimit'],
+
+        data() {
+            return {
+                winWidth: null,
+            }
+        },
 
         computed: {
+            computedPlugins() {
+                return this.plugins.filter((plugin, key) => {
+                    if (!this.autoLimit || (this.autoLimit && key < this.limit)) {
+                        return true
+                    }
 
-            cssClass() {
-                let cssClass = 'ps-grid-plugins';
+                    return false
+                })
+            },
 
-                if(this.columns) {
-                    cssClass += ' ps-grid-plugins-'+this.columns;
+            limit() {
+                let totalPlugins = this.plugins.length
+
+                if (this.winWidth < 1400) {
+                    totalPlugins = 4
                 }
 
-                return cssClass;
-            }
+                const remains = totalPlugins % (this.oddNumberOfColumns ? 3 : 2)
 
+                return totalPlugins - remains
+            },
+
+            oddNumberOfColumns() {
+                if (this.winWidth < 1400 || this.winWidth >= 1824) {
+                    return false
+                }
+
+                return true
+            },
         },
 
         methods: {
-
             showPlugin(plugin) {
-                this.$root.showPlugin(plugin);
+                this.$router.push({path: '/' + plugin.handle})
             },
 
+            onWindowResize() {
+                this.winWidth = window.innerWidth
+            }
         },
 
+        mounted() {
+            this.winWidth = window.innerWidth
+            this.$root.$on('windowResize', this.onWindowResize)
+        },
+
+        beforeDestroy() {
+            this.$root.$off('windowResize', this.onWindowResize)
+        }
     }
 </script>

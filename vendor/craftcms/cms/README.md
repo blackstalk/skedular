@@ -1,27 +1,44 @@
-<p align="center"><a href="https://craftcms.com/" target="_blank"><img width="312" height="90" src="https://craftcms.com/craftcms.svg" alt="Craft CMS"></a></p>
+<a href="https://craftcms.com/" rel="noopener" target="_blank"><img width="247" height="60" src="https://craftcms.com/craftcms.svg" alt="Craft CMS"></a>
+
+<br>
 
 ## About Craft CMS
 
-Craft is a content-first CMS that aims to make life enjoyable for developers and content managers alike. It is optimized for bespoke web and application development, offering developers a clean slate to build out exactly what they want, rather than wrestling with a theme.
+Craft is a flexible, user-friendly CMS for creating custom digital experiences on the web and beyond.
 
-Learn more about Craft at [craftcms.com](https://craftcms.com).
+It features:
 
-## How to Install Craft 3
+- An intuitive, user-friendly control panel for content creation and administrative tasks.
+- A clean-slate approach to content modeling that doesn’t make any assumptions about the content you need to manage.
+- An auto-generated [GraphQL API](https://docs.craftcms.com/v3/graphql.html) that can be consumed for building headless applications.
+- A fast and flexible [templating system](https://docs.craftcms.com/v3/dev/) based on Twig for building traditional websites.
+- A powerful [ecommerce platform](https://craftcms.com/commerce) for building bespoke ecommerce experiences.
+- A built-in Plugin Store with hundreds of free and commercial [plugins](https://plugins.craftcms.com/).
+- A robust framework for [module and plugin development](https://docs.craftcms.com/v3/extend/).
+- An active, vibrant [community](https://craftcms.com/community).
 
-See the Craft 3 documentation for [installation](https://github.com/craftcms/docs/blob/v3/en/installation.md) and [updating](https://github.com/craftcms/docs/blob/v3/en/upgrade.md) instructions.
+You can learn more about it at [craftcms.com](https://craftcms.com), and documentation is available at [docs.craftcms.com](https://docs.craftcms.com/v3/).
 
-## Resources
+## Tech Specs
 
-#### Official Resources
-- [Craft 3 Documentation](https://github.com/craftcms/docs)
-- [Craft 3 Class Reference](https://docs.craftcms.com/api/v3/)
-- [Craft 3 Plugins](https://plugins.craftcms.com)
-- [Demo site](https://demo.craftcms.com/)
-- [Craft Slack](https://craftcms.com/community#slack)
-- [Craft CMS Stack Exchange](http://craftcms.stackexchange.com/)
+Craft is a self-hosted PHP 7 application. It can connect to MySQL and PostgreSQL for content storage. See [Server Requirements](https://docs.craftcms.com/v3/requirements.html) for more details.
 
-#### Community Resources
-- [Mijingo](https://mijingo.com/craft) – Video courses and other learning resources
-- [Envato Tuts+](https://webdesign.tutsplus.com/categories/craft-cms/courses) – Video courses
-- [Straight Up Craft](http://straightupcraft.com/) – Articles, tutorials, and more
-- [pluginfactory.io](https://pluginfactory.io/) – Craft plugin scaffold generator
+## Popular Resources
+
+- **[Tutorial](https://docs.craftcms.com/tutorial/)** – Get set up and learn the basics.
+- **[Documentation](http://docs.craftcms.com/v3/)** – Read the official docs.
+- **[Knowledge Base](https://craftcms.com/knowledge-base)** – Find answers to common problems.
+- **[#craftcms](https://twitter.com/hashtag/craftcms)** – See the latest tweets about Craft.
+- **[Discord](https://craftcms.com/discord)** – Meet the community.
+- **[Stack Exchange](http://craftcms.stackexchange.com/)** – Get help and help others.
+- **[CraftQuest](https://craftquest.io/)** – Watch unlimited video lessons and courses.
+- **[Craft Link List](http://craftlinklist.com/)** – Stay in-the-know.
+- **[nystudio107 Blog](https://nystudio107.com/blog)** – Learn Craft and modern web development.
+
+---
+
+<p>
+<a href="https://travis-ci.com/craftcms/cms"><img src="https://img.shields.io/travis/com/craftcms/cms/develop.svg?label=build" alt="Build Status"></a>
+<a href="https://packagist.org/packages/craftcms/cms"><img src="https://img.shields.io/packagist/dt/craftcms/cms.svg?label=downloads" alt="Total Packagist Downloads"></a>
+<a href="https://github.com/craftcms/cms/releases"><img src="https://img.shields.io/github/tag/craftcms/cms.svg?label=stable" alt="Latest Stable Version"></a>
+</p>

@@ -10,6 +10,7 @@ namespace craft\elements\db;
 use Craft;
 use craft\db\Query;
 use craft\db\QueryAbortedException;
+use craft\db\Table;
 use craft\elements\Category;
 use craft\helpers\Db;
 use craft\helpers\StringHelper;
@@ -24,28 +25,37 @@ use yii\db\Connection;
  * @method Category|array|null one($db = null)
  * @method Category|array|null nth(int $n, Connection $db = null)
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
+ * @supports-structure-params
+ * @supports-site-params
+ * @supports-enabledforsite-param
+ * @supports-title-param
+ * @supports-slug-param
+ * @supports-uri-param
+ * @supports-status-param
+ * @replace {element} category
+ * @replace {elements} categories
+ * @replace {twig-method} craft.categories()
+ * @replace {myElement} myCategory
+ * @replace {element-class} \craft\elements\Category
  */
 class CategoryQuery extends ElementQuery
 {
-    // Properties
-    // =========================================================================
-
     // General parameters
     // -------------------------------------------------------------------------
 
     /**
      * @var bool Whether to only return categories that the user has permission to edit.
+     * @used-by editable()
      */
     public $editable = false;
 
     /**
      * @var int|int[]|null The category group ID(s) that the resulting categories must be in.
+     * @used-by group()
+     * @used-by groupId()
      */
     public $groupId;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -72,10 +82,11 @@ class CategoryQuery extends ElementQuery
     }
 
     /**
-     * Sets the [[editable]] property.
+     * Sets the [[$editable]] property.
      *
      * @param bool $value The property value (defaults to true)
      * @return static self reference
+     * @uses $editable
      */
     public function editable(bool $value = true)
     {
@@ -84,10 +95,37 @@ class CategoryQuery extends ElementQuery
     }
 
     /**
-     * Sets the [[groupId]] property based on a given category group(s)’s handle(s).
+     * Narrows the query results based on the category groups the categories belong to.
+     *
+     * Possible values include:
+     *
+     * | Value | Fetches categories…
+     * | - | -
+     * | `'foo'` | in a group with a handle of `foo`.
+     * | `'not foo'` | not in a group with a handle of `foo`.
+     * | `['foo', 'bar']` | in a group with a handle of `foo` or `bar`.
+     * | `['not', 'foo', 'bar']` | not in a group with a handle of `foo` or `bar`.
+     * | a [[CategoryGroup|CategoryGroup]] object | in a group represented by the object.
+     *
+     * ---
+     *
+     * ```twig
+     * {# Fetch categories in the Foo group #}
+     * {% set {elements-var} = {twig-method}
+     *     .group('foo')
+     *     .all() %}
+     * ```
+     *
+     * ```php
+     * // Fetch categories in the Foo group
+     * ${elements-var} = {php-method}
+     *     ->group('foo')
+     *     ->all();
+     * ```
      *
      * @param string|string[]|CategoryGroup|null $value The property value
      * @return static self reference
+     * @uses $groupId
      */
     public function group($value)
     {
@@ -97,7 +135,7 @@ class CategoryQuery extends ElementQuery
         } else if ($value !== null) {
             $this->groupId = (new Query())
                 ->select(['id'])
-                ->from('{{%categorygroups}}')
+                ->from(Table::CATEGORYGROUPS)
                 ->where(Db::parseParam('handle', $value))
                 ->column();
         } else {
@@ -108,19 +146,42 @@ class CategoryQuery extends ElementQuery
     }
 
     /**
-     * Sets the [[groupId]] property.
+     * Narrows the query results based on the category groups the categories belong to, per the groups’ IDs.
+     *
+     * Possible values include:
+     *
+     * | Value | Fetches categories…
+     * | - | -
+     * | `1` | in a group with an ID of 1.
+     * | `'not 1'` | not in a group with an ID of 1.
+     * | `[1, 2]` | in a group with an ID of 1 or 2.
+     * | `['not', 1, 2]` | not in a group with an ID of 1 or 2.
+     *
+     * ---
+     *
+     * ```twig
+     * {# Fetch categories in the group with an ID of 1 #}
+     * {% set {elements-var} = {twig-method}
+     *     .groupId(1)
+     *     .all() %}
+     * ```
+     *
+     * ```php
+     * // Fetch categories in the group with an ID of 1
+     * ${elements-var} = {php-method}
+     *     ->groupId(1)
+     *     ->all();
+     * ```
      *
      * @param int|int[]|null $value The property value
      * @return static self reference
+     * @uses $groupId
      */
     public function groupId($value)
     {
         $this->groupId = $value;
         return $this;
     }
-
-    // Protected Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -144,9 +205,6 @@ class CategoryQuery extends ElementQuery
 
         return parent::beforePrepare();
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Applies the 'editable' param to the query being prepared.
@@ -173,10 +231,10 @@ class CategoryQuery extends ElementQuery
             if ($this->structureId === null && (!is_array($this->groupId) || count($this->groupId) === 1)) {
                 $structureId = (new Query())
                     ->select(['structureId'])
-                    ->from(['{{%categorygroups}}'])
+                    ->from([Table::CATEGORYGROUPS])
                     ->where(Db::parseParam('id', $this->groupId))
                     ->scalar();
-                $this->structureId = $structureId ? (int)$structureId : false;
+                $this->structureId = (int)$structureId ?: false;
             }
 
             $this->subQuery->andWhere(Db::parseParam('categories.groupId', $this->groupId));

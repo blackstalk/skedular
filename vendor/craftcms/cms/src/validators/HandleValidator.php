@@ -8,20 +8,16 @@
 namespace craft\validators;
 
 use Craft;
-use craft\helpers\StringHelper;
 use yii\validators\Validator;
 
 /**
  * Class HandleValidator.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class HandleValidator extends Validator
 {
-    // Static
-    // =========================================================================
-
     /**
      * @var string
      */
@@ -31,43 +27,38 @@ class HandleValidator extends Validator
      * @var array
      */
     public static $baseReservedWords = [
-        'id',
-        'dateCreated',
-        'dateUpdated',
-        'uid',
-        'this',
-        'true',
-        'false',
-        'y',
-        'n',
-        'yes',
-        'no',
-        'classHandle',
-        'handle',
-        'name',
+        'attribute',
+        'attributeLabels',
         'attributeNames',
         'attributes',
-        'attribute',
-        'rules',
-        'attributeLabels',
-        'fields',
+        'classHandle',
         'content',
+        'dateCreated',
+        'dateUpdated',
+        'false',
+        'fields',
+        'handle',
+        'id',
+        'n',
+        'name',
+        'no',
         'rawContent',
+        'rules',
+        'searchKeywords',
         'section',
+        'this',
+        'true',
         'type',
+        'uid',
         'value',
+        'y',
+        'yes',
     ];
-
-    // Properties
-    // =========================================================================
 
     /**
      * @var array
      */
     public $reservedWords = [];
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -79,15 +70,15 @@ class HandleValidator extends Validator
         // Handles are always required, so if it's blank, the required validator will catch this.
         if ($handle) {
             $reservedWords = array_merge($this->reservedWords, static::$baseReservedWords);
-            $reservedWords = array_map([StringHelper::class, 'toLowerCase'], $reservedWords);
-            $lcHandle = StringHelper::toLowerCase($handle);
+            $reservedWords = array_map('strtolower', $reservedWords);
+            $lcHandle = strtolower($handle);
 
             if (in_array($lcHandle, $reservedWords, true)) {
                 $message = Craft::t('app', '“{handle}” is a reserved word.',
                     ['handle' => $handle]);
                 $this->addError($model, $attribute, $message);
             } else {
-                if (!preg_match('/^'.static::$handlePattern.'$/', $handle)) {
+                if (!preg_match('/^' . static::$handlePattern . '$/', $handle)) {
                     $altMessage = Craft::t('app', '“{handle}” isn’t a valid handle.', ['handle' => $handle]);
                     $message = $this->message ?? $altMessage;
                     $this->addError($model, $attribute, $message);

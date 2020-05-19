@@ -15,13 +15,10 @@ use yii\base\Exception;
 /**
  * @inheritdoc
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class I18N extends \yii\i18n\I18N
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var bool Whether the [PHP intl extension](http://php.net/manual/en/book.intl.php) is loaded.
      */
@@ -34,7 +31,14 @@ class I18N extends \yii\i18n\I18N
     private $_allLocaleIds;
 
     /**
-     * @var
+     * @var string[]
+     * @see getAppLocaleIds()
+     */
+    private $_appLocaleIds;
+
+    /**
+     * @var Locale[]
+     * @see getAppLocales()
      */
     private $_appLocales;
 
@@ -42,9 +46,6 @@ class I18N extends \yii\i18n\I18N
      * @var bool|null Whether [[translate()]] should wrap translations with `@` characters
      */
     private $_translationDebugOutput;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -79,6 +80,7 @@ class I18N extends \yii\i18n\I18N
 
     /**
      * Returns an array of all known locale IDs.
+     *
      * If the [PHP intl extension](http://php.net/manual/en/book.intl.php) is loaded, then this will be based on
      * all of the locale IDs it knows about. Otherwise, it will be based on the locale data files located in
      * `vendor/craftcms/cms/src/config/locales/` and `config/locales/`.
@@ -92,8 +94,8 @@ class I18N extends \yii\i18n\I18N
             if ($this->getIsIntlLoaded()) {
                 $this->_allLocaleIds = ResourceBundle::getLocales(null);
             } else {
-                $appLocalesPath = Craft::$app->getBasePath().DIRECTORY_SEPARATOR.'config'.DIRECTORY_SEPARATOR.'locales';
-                $customLocalesPath = Craft::$app->getPath()->getConfigPath().'/locales';
+                $appLocalesPath = Craft::$app->getBasePath() . DIRECTORY_SEPARATOR . 'config' . DIRECTORY_SEPARATOR . 'locales';
+                $customLocalesPath = Craft::$app->getPath()->getConfigPath() . '/locales';
 
                 $localeFiles = FileHelper::findFiles($appLocalesPath, [
                     'only' => ['*.php'],
@@ -157,25 +159,11 @@ class I18N extends \yii\i18n\I18N
             return $this->_appLocales;
         }
 
-        $this->_appLocales = [new Locale(Craft::$app->sourceLanguage)];
+        $this->_appLocales = [];
 
-        // Scan the translations/ dir for the others
-        $dir = Craft::$app->getPath()->getCpTranslationsPath();
-        $handle = opendir($dir);
-        if ($handle === false) {
-            throw new Exception("Unable to open directory: $dir");
+        foreach ($this->getAppLocaleIds() as $localeId) {
+            $this->_appLocales[] = new Locale($localeId);
         }
-        while (($subDir = readdir($handle)) !== false) {
-            if ($subDir === '.' || $subDir === '..' || $subDir === Craft::$app->sourceLanguage) {
-                continue;
-            }
-            $path = $dir.DIRECTORY_SEPARATOR.$subDir;
-            if (is_file($path)) {
-                continue;
-            }
-            $this->_appLocales[] = new Locale($subDir);
-        }
-        closedir($handle);
 
         return $this->_appLocales;
     }
@@ -185,17 +173,43 @@ class I18N extends \yii\i18n\I18N
      * files exist in `vendor/craftcms/cms/src/translations/`.
      *
      * @return array An array of locale IDs.
+     * @throws Exception in case of failure
      */
     public function getAppLocaleIds(): array
     {
-        $locales = $this->getAppLocales();
-        $localeIds = [];
-
-        foreach ($locales as $locale) {
-            $localeIds[] = $locale->id;
+        if ($this->_appLocaleIds !== null) {
+            return $this->_appLocaleIds;
         }
 
-        return $localeIds;
+        $localeIds = [
+            Craft::$app->sourceLanguage => true,
+        ];
+
+        // Scan the translations/ dir for the others
+        $dir = Craft::$app->getPath()->getCpTranslationsPath();
+        $handle = opendir($dir);
+        if ($handle === false) {
+            throw new Exception("Unable to open directory: $dir");
+        }
+        while (($subDir = readdir($handle)) !== false) {
+            if ($subDir !== '.' && $subDir !== '..' && is_dir($dir . DIRECTORY_SEPARATOR . $subDir)) {
+                $localeIds[$subDir] = true;
+            }
+        }
+        closedir($handle);
+
+        // Add in any extra locales defined by the config
+        $generalConfig = Craft::$app->getConfig()->getGeneral();
+        if (!empty($generalConfig->extraAppLocales)) {
+            foreach ($generalConfig->extraAppLocales as $localeId) {
+                $localeIds[$localeId] = true;
+            }
+        }
+        if ($generalConfig->defaultCpLanguage) {
+            $localeIds[$generalConfig->defaultCpLanguage] = true;
+        }
+
+        return $this->_appLocaleIds = array_keys($localeIds);
     }
 
     // Site Locales
@@ -225,9 +239,8 @@ class I18N extends \yii\i18n\I18N
      */
     public function getPrimarySiteLocale(): Locale
     {
-        $locales = $this->getSiteLocales();
-
-        return $locales[0];
+        $site = Craft::$app->getSites()->getPrimarySite();
+        return new Locale($site->language);
     }
 
     /**
@@ -238,7 +251,7 @@ class I18N extends \yii\i18n\I18N
      */
     public function getPrimarySiteLocaleId(): string
     {
-        return $this->getPrimarySiteLocale()->id;
+        return Craft::$app->getSites()->getPrimarySite()->language;
     }
 
     /**
@@ -272,7 +285,7 @@ class I18N extends \yii\i18n\I18N
             $editableLocales = [];
 
             foreach ($locales as $locale) {
-                if (Craft::$app->getUser()->checkPermission('editLocale:'.$locale->id)) {
+                if (Craft::$app->getUser()->checkPermission('editLocale:' . $locale->id)) {
                     $editableLocales[] = $locale;
                 }
             }
@@ -307,6 +320,14 @@ class I18N extends \yii\i18n\I18N
     {
         $translation = parent::translate($category, $message, $params, $language);
 
+        // If $message is a key and came back identical to the input, translate it into the source language
+        if ($translation === $message && !in_array($category, ['yii', 'site'], true)) {
+            $messageSource = $this->getMessageSource($category);
+            if ($messageSource->sourceLanguage !== $language) {
+                $translation = parent::translate($category, $message, $params, $messageSource->sourceLanguage);
+            }
+        }
+
         if ($this->_shouldAddTranslationDebugOutput()) {
             switch ($category) {
                 case 'site':
@@ -319,14 +340,11 @@ class I18N extends \yii\i18n\I18N
                     $char = '%';
             }
 
-            $translation = $char.$translation.$char;
+            $translation = $char . $translation . $char;
         }
 
         return $translation;
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Returns whether [[translate()]] should wrap translations with `@` characters,

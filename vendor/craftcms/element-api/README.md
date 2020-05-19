@@ -1,5 +1,4 @@
-Element API for Craft CMS
-=========================
+# Element API for Craft CMS
 
 This plugin makes it easy to create a JSON API for your entries (and other element types) in [Craft CMS](http://buildwithcraft.com).
 
@@ -8,26 +7,58 @@ It’s powered by Phil Sturgeon’s excellent [Fractal](http://fractal.thephplea
 
 ## Requirements
 
-This plugin requires Craft CMS 3.0.0-beta.20 or later.
+This plugin requires Craft CMS 3.0.0-RC16 or later.
 
 
 ## Installation
 
-To install the plugin, follow these instructions.
+You can install this plugin from the Plugin Store or with Composer.
 
-1. Open your terminal and go to your Craft project:
+#### From the Plugin Store
 
-        cd /path/to/project
+Go to the Plugin Store in your project’s Control Panel and search for “Element API”. Then click on the “Install” button in its modal window.
 
-2. Then tell Composer to load the plugin:
+#### With Composer
 
-        composer require craftcms/element-api
+Open your terminal and run the following commands:
 
-3. In the Control Panel, go to Settings → Plugins and click the “Install” button for Element API.
+```bash
+# go to the project directory
+cd /path/to/my-project.test
+
+# tell Composer to load the plugin
+composer require craftcms/element-api
+
+# tell Craft to install the plugin
+./craft install/plugin element-api
+```
+
+## Upgrading from Craft 2
+
+If you’re in the process of upgrading a Craft 2 project to Craft 3, follow these instructions to get Element API back up and running:
+
+1. [Install Element API 2.x](#installation).
+2. Move your old `craft/config/elementapi.php` file to `config/`, and rename it to `element-api.php`.
+3. Update your `elementType` endpoint settings to the new element type class names:
+
+   | Old                                           | New                            |
+   | --------------------------------------------- | ------------------------------ |
+   | `ElementType::Asset` or `'Asset'`             | `'craft\elements\Asset'`       |
+   | `ElementType::Category` or `'Category'`       | `'craft\elements\Category'`    |
+   | `ElementType::Entry` or `'Entry'`             | `'craft\elements\Entry'`       |
+   | `ElementType::GlobalSet` or `'GlobalSet'`     | `'craft\elements\GlobalSet'`   |
+   | `ElementType::MatrixBlock` or `'MatrixBlock'` | `'craft\elements\MatrixBlock'` |
+   | `ElementType::Tag` or `'Tag'`                 | `'craft\elements\Tag'`         |
+   | `ElementType::User` or `'User'`               | `'craft\elements\User'`        |
+
+4. Replace any `'first' => true` endpoint settings to `'one' => true`.
+
 
 ## Setup
 
-To define your API endpoints, create a new `element-api.php` file within your craft/config/ folder. This file should return an array with an `endpoints` key, which defines your site’s API endpoints. Within the `endpoints` array, keys are URL patterns, and values are endpoint configurations.
+To define your API endpoints, create a new `element-api.php` file within your `config/` folder. This file should return an array with an `endpoints` key, which defines your site’s API endpoints.
+
+Within the `endpoints` array, keys are URL patterns, and values are functions that define the endpoint configurations.
 
 ```php
 <?php
@@ -37,18 +68,20 @@ use craft\helpers\UrlHelper;
 
 return [
     'endpoints' => [
-        'news.json' => [
-            'elementType' => Entry::class,
-            'criteria' => ['section' => 'news'],
-            'transformer' => function(Entry $entry) {
-                return [
-                    'title' => $entry->title,
-                    'url' => $entry->url,
-                    'jsonUrl' => UrlHelper::url("news/{$entry->id}.json"),
-                    'summary' => $entry->summary,
-                ];
-            },
-        ],
+        'news.json' => function() {
+            return [
+                'elementType' => Entry::class,
+                'criteria' => ['section' => 'news'],
+                'transformer' => function(Entry $entry) {
+                    return [
+                        'title' => $entry->title,
+                        'url' => $entry->url,
+                        'jsonUrl' => UrlHelper::url("news/{$entry->id}.json"),
+                        'summary' => $entry->summary,
+                    ];
+                },
+            ];
+        },
         'news/<entryId:\d+>.json' => function($entryId) {
             return [
                 'elementType' => Entry::class,
@@ -94,7 +127,7 @@ The class name of the element type that the API should be associated with. Craft
 
 #### `criteria`
 
-An array of parameters that should be set on the [Element Query](https://github.com/craftcms/docs/blob/master/en/element-queries.md) that will be fetching the elements.
+An array of parameters that should be set on the [Element Query](https://docs.craftcms.com/v3/element-queries.html) that will be fetching the elements.
 
 ```php
 'criteria' => [
@@ -212,7 +245,7 @@ Possible values are:
 The [include names](http://fractal.thephpleague.com/transformers/#including-data) that should be included for the current request, if any.
 
 ```php
-'includes' => Craft::$app->request->getQueryParam('include'),
+'includes' => (array)Craft::$app->request->getQueryParam('include'),
 ```
 
 Note that this setting requires a custom transformer class that’s prepped to handle includes:
@@ -245,6 +278,24 @@ The [include names](http://fractal.thephpleague.com/transformers/#including-data
 ```
 
 Like [`includes`](#includes), this setting requires a custom transformer class.
+
+#### `callback`
+
+If this is set, a JSONP response will be returned with an `application/javascript` content type, using this setting value as the callback function.
+
+For example, if you set this to:
+
+```php
+'callback' => 'foo',
+```
+
+Then the response will look like:
+
+```javascript
+foo({ /* ... */});
+```
+
+Note that if you set this, the `jsonOptions` and `pretty` settings will be ignored. 
 
 #### `jsonOptions`
 
@@ -279,11 +330,11 @@ Note that the `onBeforeSendData` event does not get triggered when the cache is 
 'cache' => 'PT1M', // one minute
 ```
 
-### Dynamic URL Patterns and Endpoint Configurations
+### Dynamic URL Patterns
 
 URL patterns can contain dynamic subpatterns in the format of `<subpatternName:regex>`, where `subpatternName` is the name of the subpattern, and `regex` is a valid regular expression. For example, the URL pattern “`news/<entryId:\d+>.json`” will match URLs like `news/100.json`. You can also use the tokens `{handle}` and `{slug}` within your regular expression, which will be replaced with the appropriate regex patterns for matching handles and  element slugs.
 
-Endpoint configurations can also be dynamic, by using a function instead of an array. If you do this, the function should return an array of configuration settings. Any subpattern matches in the URL pattern will be mapped to the function’s arguments. For example, if a URL pattern contains an `entryId` subpattern, and the endpoint configuration is a function with an `$entryId` argument, then whatever matches the URL subpattern will be passed to that function argument. This makes it easy to modify the resulting endpoint configuration based on the URL subpattern matches.
+Any subpattern matches in the URL pattern will be mapped to the endpoint config function’s arguments. For example, if a URL pattern contains an `entryId` subpattern, then you can add an `$entryId` argument to your endpoint config function, and whatever matches the URL subpattern will be passed to `$entryId`.
 
 ```php
 'news/<entryId:\d+>.json' => function($entryId) {
@@ -294,7 +345,6 @@ Endpoint configurations can also be dynamic, by using a function instead of an a
     ];
 },
 ```
-
 
 ### Setting Default Configuration Settings
 
@@ -318,9 +368,11 @@ return [
     ],
 
     'endpoints' => [
-        'news.json' => [
-            'criteria' => ['section' => 'news'],
-        ],
+        'news.json' => function() {
+            return [
+                'criteria' => ['section' => 'news'],
+            ]
+        },
         'news/<entryId:\d+>.json' => function($entryId) {
             return [
                 'criteria' => ['id' => $entryId],
@@ -331,33 +383,6 @@ return [
 ];
 ```
 
-### Entry Drafts and Versions
-
-Element API provides an entry-specific Fractal resource that adds `draftId` and `versionId` configuration settings. To use it, set the [`class`](#class) configuration setting to `'craft\elementapi\resources\EntryResource'`.
-
-If `draftId` and `versionId` are not set, it will behave identically to the default Fractal resource. If either of them are set, the `criteria` setting will be ignored, and only the requested entry draft/version will be returned.
-
-It’s probably a good idea to add some level of authentication to your endpoint before setting `draftId` or `versionId`.
-
-```php
-'news/<entryId:\d+>.json' => function($entryId) {
-    if ($draftId = Craft::$app->request->getQueryParam('draftId')) {
-        // Make sure they have permission to view drafts
-        $user = Craft::$app->user->getIdentity();
-        if (!$user || (!$user->admin && !$user->isInGroup('authors'))) {
-            throw new \yii\web\ForbiddenHttpException('You must be an author to access drafts!');
-        }
-    }
-
-    return [
-        'class' => craft\elementapi\resources\EntryResource::class,
-        'criteria' => ['id' => $entryId],
-        'draftId' => $draftId,
-        'one' => true,
-    ];
-},
-```
-
 ## Examples
 
 Here are a few endpoint examples, and what their response would look like.
@@ -365,18 +390,20 @@ Here are a few endpoint examples, and what their response would look like.
 ### Paginated Entry Index Endpoint
 
 ```php
-'ingredients.json' => [
-    'criteria' => ['section' => 'ingredients'],
-    'elementsPerPage' => 10,
-    'transformer' => function(craft\elements\Entry $entry) {
-        return [
-            'title' => $entry->title,
-            'url' => $entry->url,
-            'jsonUrl' => UrlHelper::url("ingredients/{$entry->slug}.json"),
-        ];
-    },
-    'pretty' => true,
-],
+'ingredients.json' => function() {
+    return [
+        'criteria' => ['section' => 'ingredients'],
+        'elementsPerPage' => 10,
+        'transformer' => function(craft\elements\Entry $entry) {
+            return [
+                'title' => $entry->title,
+                'url' => $entry->url,
+                'jsonUrl' => UrlHelper::url("ingredients/{$entry->slug}.json"),
+            ];
+        },
+        'pretty' => true,
+    ];
+},
 ```
 
 ```json5
@@ -422,14 +449,14 @@ Here are a few endpoint examples, and what their response would look like.
         'transformer' => function(craft\elements\Entry $entry) {
             // Create an array of all the photo URLs
             $photos = [];
-            foreach ($entry->photos as $photo) {
+            foreach ($entry->photos->all() as $photo) {
                 $photos[] = $photo->url;
             }
 
             return [
                 'title' => $entry->title,
                 'url' => $entry->url,
-                'description' => (string) $entry->description,
+                'description' => (string)$entry->description,
                 'photos' => $photos
             ];
         },
@@ -456,31 +483,33 @@ Here’s how to set up a [JSON Feed](https://jsonfeed.org/) ([Version 1](https:/
 Note that `photos`, `body`, `summary`, and `tags` are imaginary custom fields.
 
 ```php
-'feed.json' => [
-    'serializer' => 'jsonFeed',
-    'elementType' => craft\elements\Entry::class,
-    'criteria' => ['section' => 'news'],
-    'transformer' => function(craft\elements\Entry $entry) {
-        $image = $entry->photos->first();
-
-        return [
-            'id' => (string) $entry->id,
-            'url' => $entry->url,
-            'title' => $entry->title,
-            'content_html' => (string) $entry->body,
-            'summary' => $entry->summary,
-            'image' => $image ? $image->url : null,
-            'date_published' => $entry->postDate->format(\DateTime::ATOM),
-            'date_modified' => $entry->dateUpdated->format(\DateTime::ATOM),
-            'author' => ['name' => $entry->author->name],
-            'tags' => array_map('strval', $entry->tags->find()),
-        ];
-    },
-    'meta' => [
-        'description' => 'Recent news from Happy Lager',
-    ],
-    'pretty' => true,
-]
+'feed.json' => function() {
+    return [
+        'serializer' => 'jsonFeed',
+        'elementType' => craft\elements\Entry::class,
+        'criteria' => ['section' => 'news'],
+        'transformer' => function(craft\elements\Entry $entry) {
+            $image = $entry->photos->one();
+    
+            return [
+                'id' => (string)$entry->id,
+                'url' => $entry->url,
+                'title' => $entry->title,
+                'content_html' => (string)$entry->body,
+                'summary' => $entry->summary,
+                'image' => $image ? $image->url : null,
+                'date_published' => $entry->postDate->format(\DateTime::ATOM),
+                'date_modified' => $entry->dateUpdated->format(\DateTime::ATOM),
+                'author' => ['name' => $entry->author->name],
+                'tags' => array_map('strval', $entry->tags->all()),
+            ];
+        },
+        'meta' => [
+            'description' => 'Recent news from Happy Lager',
+        ],
+        'pretty' => true,
+    ];
+},
 ```
 
 ```json5

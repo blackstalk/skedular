@@ -8,14 +8,14 @@
 namespace yii\queue\beanstalk;
 
 use Pheanstalk\Exception\ServerException;
+use Pheanstalk\Job;
 use Pheanstalk\Pheanstalk;
 use Pheanstalk\PheanstalkInterface;
-use yii\base\InvalidParamException;
-use yii\queue\cli\LoopInterface;
+use yii\base\InvalidArgumentException;
 use yii\queue\cli\Queue as CliQueue;
 
 /**
- * Beanstalk Queue
+ * Beanstalk Queue.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */
@@ -50,8 +50,8 @@ class Queue extends CliQueue
      */
     public function run($repeat, $timeout = 0)
     {
-        return $this->runWorker(function (LoopInterface $loop) use ($repeat, $timeout) {
-            while ($loop->canContinue()) {
+        return $this->runWorker(function (callable $canContinue) use ($repeat, $timeout) {
+            while ($canContinue()) {
                 if ($payload = $this->getPheanstalk()->reserveFromTube($this->tube, $timeout)) {
                     $info = $this->getPheanstalk()->statsJob($payload);
                     if ($this->handleMessage(
@@ -75,7 +75,7 @@ class Queue extends CliQueue
     public function status($id)
     {
         if (!is_numeric($id) || $id <= 0) {
-            throw new InvalidParamException("Unknown message ID: $id.");
+            throw new InvalidArgumentException("Unknown message ID: $id.");
         }
 
         try {
@@ -95,7 +95,7 @@ class Queue extends CliQueue
     }
 
     /**
-     * Removes a job by ID
+     * Removes a job by ID.
      *
      * @param int $id of a job
      * @return bool
@@ -104,8 +104,7 @@ class Queue extends CliQueue
     public function remove($id)
     {
         try {
-            $job = $this->getPheanstalk()->peek($id);
-            $this->getPheanstalk()->delete($job);
+            $this->getPheanstalk()->delete(new Job($id, null));
             return true;
         } catch (ServerException $e) {
             if (strpos($e->getMessage(), 'NOT_FOUND') === 0) {

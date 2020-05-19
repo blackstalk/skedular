@@ -22,7 +22,7 @@ Craft.CategoryIndex = Craft.BaseElementIndex.extend(
             for (var i = 0; i < Craft.editableCategoryGroups.length; i++) {
                 var group = Craft.editableCategoryGroups[i];
 
-                if (this.getSourceByKey('group:' + group.id)) {
+                if (this.getSourceByKey('group:' + group.uid)) {
                     this.editableGroups.push(group);
                 }
             }
@@ -109,7 +109,7 @@ Craft.CategoryIndex = Craft.BaseElementIndex.extend(
                         if (this.settings.context === 'index' || group !== selectedGroup) {
                             href = this._getGroupTriggerHref(group);
                             label = (this.settings.context === 'index' ? group.name : Craft.t('app', 'New {group} category', {group: group.name}));
-                            menuHtml += '<li><a ' + href + '">' + Craft.escapeHtml(label) + '</a></li>';
+                            menuHtml += '<li><a ' + href + '>' + Craft.escapeHtml(label) + '</a></li>';
                         }
                     }
 
@@ -184,7 +184,6 @@ Craft.CategoryIndex = Craft.BaseElementIndex.extend(
 
             Craft.createElementEditor(this.elementType, {
                 hudTrigger: this.$newCategoryBtnGroup,
-                elementType: 'craft\\elements\\Category',
                 siteId: this.siteId,
                 attributes: {
                     groupId: groupId
@@ -200,7 +199,7 @@ Craft.CategoryIndex = Craft.BaseElementIndex.extend(
                 }, this),
                 onSaveElement: $.proxy(function(response) {
                     // Make sure the right group is selected
-                    var groupSourceKey = 'group:' + groupId;
+                    var groupSourceKey = 'group:' + group.uid;
 
                     if (this.sourceKey !== groupSourceKey) {
                         this.selectSourceByKey(groupSourceKey);

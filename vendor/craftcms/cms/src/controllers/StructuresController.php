@@ -21,13 +21,10 @@ use yii\web\Response;
  * Note that all actions in the controller require an authenticated Craft session via [[allowAnonymous]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class StructuresController extends Controller
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var Structure|null
      */
@@ -38,13 +35,10 @@ class StructuresController extends Controller
      */
     private $_element;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * Initializes the application component.
      *
-     * @throws ForbiddenHttpException if this is not a Control Panel request
+     * @throws ForbiddenHttpException if this is not a control panel request
      * @throws NotFoundHttpException if the requested element cannot be found
      */
     public function init()
@@ -54,9 +48,9 @@ class StructuresController extends Controller
 
         $request = Craft::$app->getRequest();
 
-        // This controller is only available to the Control Panel
+        // This controller is only available to the control panel
         if (!$request->getIsCpRequest()) {
-            throw new ForbiddenHttpException('Action only available from the Control Panel');
+            throw new ForbiddenHttpException('Action only available from the control panel');
         }
 
         $structureId = $request->getRequiredBodyParam('structureId');
@@ -64,7 +58,7 @@ class StructuresController extends Controller
         $siteId = $request->getRequiredBodyParam('siteId');
 
         // Make sure they have permission to edit this structure
-        $this->requireAuthorization('editStructure:'.$structureId);
+        $this->requireAuthorization('editStructure:' . $structureId);
 
         if (($this->_structure = Craft::$app->getStructures()->getStructureById($structureId)) === null) {
             throw new NotFoundHttpException('Structure not found');
@@ -80,14 +74,15 @@ class StructuresController extends Controller
         $this->_element = $elementType::find()
             ->id($elementId)
             ->siteId($siteId)
-            ->status(null)
-            ->enabledForSite(false)
+            ->anyStatus()
             ->structureId($structureId)
             ->one();
 
         if ($this->_element === null) {
             throw new NotFoundHttpException('Element not found');
         }
+
+        parent::init();
     }
 
     /**

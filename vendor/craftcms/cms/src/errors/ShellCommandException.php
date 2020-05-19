@@ -14,7 +14,7 @@ use yii\base\Exception;
  * ShellCommandException represents an exception caused by setting an invalid license key on a plugin.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class ShellCommandException extends Exception
 {
@@ -72,7 +72,7 @@ class ShellCommandException extends Exception
             } else {
                 $command = '`false`';
             }
-            $message = "The shell command {$command} failed with exit code {$exitCode}".($error ? ": {$error}" : '.');
+            $message = "The shell command {$command} failed with exit code {$exitCode}" . ($error ? ": {$error}" : '.');
         }
 
         parent::__construct($message, $code);

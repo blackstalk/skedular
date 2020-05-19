@@ -7,9 +7,13 @@
 
 namespace craft\models;
 
+use Craft;
+use craft\base\GqlInlineFragmentInterface;
 use craft\base\Model;
 use craft\behaviors\FieldLayoutBehavior;
 use craft\elements\MatrixBlock;
+use craft\fields\Matrix;
+use yii\base\InvalidConfigException;
 
 /**
  * MatrixBlockType model class.
@@ -17,13 +21,10 @@ use craft\elements\MatrixBlock;
  * @property bool $isNew Whether this is a new block type
  * @mixin FieldLayoutBehavior
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class MatrixBlockType extends Model
+class MatrixBlockType extends Model implements GqlInlineFragmentInterface
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|string|null ID The block ID. If unsaved, it will be in the format "newX".
      */
@@ -59,30 +60,32 @@ class MatrixBlockType extends Model
      */
     public $hasFieldErrors = false;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|mixed
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
     public function behaviors()
     {
-        return [
-            'fieldLayout' => [
-                'class' => FieldLayoutBehavior::class,
-                'elementType' => MatrixBlock::class
-            ],
+        $behaviors = parent::behaviors();
+        $behaviors['fieldLayout'] = [
+            'class' => FieldLayoutBehavior::class,
+            'elementType' => MatrixBlock::class,
         ];
+        return $behaviors;
     }
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        return [
-            [['id', 'fieldId', 'sortOrder'], 'number', 'integerOnly' => true],
-        ];
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'fieldId', 'sortOrder'], 'number', 'integerOnly' => true];
+        return $rules;
     }
 
     /**
@@ -92,7 +95,7 @@ class MatrixBlockType extends Model
      */
     public function __toString(): string
     {
-        return (string)$this->handle;
+        return (string)$this->handle ?: static::class;
     }
 
     /**
@@ -103,5 +106,44 @@ class MatrixBlockType extends Model
     public function getIsNew(): bool
     {
         return (!$this->id || strpos($this->id, 'new') === 0);
+    }
+
+    /**
+     * Returns the block type's field.
+     *
+     * @return Matrix
+     * @throws InvalidConfigException if [[fieldId]] is missing or invalid
+     * @since 3.3.0
+     */
+    public function getField(): Matrix
+    {
+        if ($this->fieldId === null) {
+            throw new InvalidConfigException('Block type missing its field ID');
+        }
+
+        /** @var Matrix $field */
+        if (($field = Craft::$app->getFields()->getFieldById($this->fieldId)) === null) {
+            throw new InvalidConfigException('Invalid field ID: ' . $this->fieldId);
+        }
+
+        return $field;
+    }
+
+    /**
+     * @inheritdoc
+     * @since 3.3.0
+     */
+    public function getFieldContext(): string
+    {
+        return 'matrixBlockType:' . $this->uid;
+    }
+
+    /**
+     * @inheritdoc
+     * @since 3.3.0
+     */
+    public function getEagerLoadingPrefix(): string
+    {
+        return $this->handle;
     }
 }

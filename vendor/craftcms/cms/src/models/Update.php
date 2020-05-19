@@ -16,19 +16,13 @@ use craft\base\Model;
  * @property bool $hasReleases Whether there are any releases available
  * @property UpdateRelease|null $latest The latest release (if any are available)
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Update extends Model
 {
-    // Constants
-    // =========================================================================
-
     const STATUS_ELIGIBLE = 'eligible';
     const STATUS_BREAKPOINT = 'breakpoint';
     const STATUS_EXPIRED = 'expired';
-
-    // Properties
-    // =========================================================================
 
     /**
      * @var string The status of the update (eligible, breakpoint, or expired)
@@ -55,8 +49,10 @@ class Update extends Model
      */
     public $releases = [];
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string The package name that should be used when updating
+     */
+    public $packageName;
 
     /**
      * @inheritdoc

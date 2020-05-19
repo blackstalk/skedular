@@ -8,6 +8,7 @@
 namespace craft\records;
 
 use craft\db\ActiveRecord;
+use craft\db\Table;
 use yii\db\ActiveQueryInterface;
 
 /**
@@ -18,20 +19,17 @@ use yii\db\ActiveQueryInterface;
  * @property string $handle Handle
  * @property User[] $users Users
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class UserGroup extends ActiveRecord
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      * @return string
      */
     public static function tableName(): string
     {
-        return '{{%usergroups}}';
+        return Table::USERGROUPS;
     }
 
     /**
@@ -42,6 +40,6 @@ class UserGroup extends ActiveRecord
     public function getUsers(): ActiveQueryInterface
     {
         return $this->hasMany(User::class, ['id' => 'userId'])
-            ->viaTable('{{%usergroups_users}}', ['groupId' => 'id']);
+            ->viaTable(Table::USERGROUPS_USERS, ['groupId' => 'id']);
     }
 }

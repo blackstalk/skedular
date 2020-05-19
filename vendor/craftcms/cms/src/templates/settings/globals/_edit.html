@@ -5,31 +5,32 @@
 
 
 {% block content %}
-    <input type="hidden" name="action" value="globals/save-set">
+    {{ actionInput('globals/save-set') }}
     {{ redirectInput('settings/globals') }}
 
-    {% if globalSet.id %}<input type="hidden" name="setId" value="{{ globalSet.id }}">{% endif %}
+    {% if globalSet.id %}{{ hiddenInput('setId', globalSet.id) }}{% endif %}
 
     <div id="set-settings">
         {{ forms.textField({
             first: true,
             label: "Name"|t('app'),
-            instructions: "What this global set will be called in the CP."|t('app'),
+            instructions: "What this global set will be called in the control panel."|t('app'),
             id: 'name',
             name: 'name',
             value: globalSet.name,
             errors: globalSet.getErrors('name'),
             autofocus: true,
             required: true,
-            translatable: true
         }) }}
 
         {{ forms.textField({
             label: "Handle"|t('app'),
             instructions: "How you’ll refer to this global set in the templates."|t('app'),
             id: 'handle',
-            class: 'code',
             name: 'handle',
+            class: 'code',
+            autocorrect: false,
+            autocapitalize: false,
             value: globalSet.handle,
             errors: globalSet.getErrors('handle'),
             required: true

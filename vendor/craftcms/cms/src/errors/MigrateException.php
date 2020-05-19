@@ -13,7 +13,7 @@ use yii\base\Exception;
  * MigrateException represents an error that occurred while migrating Craft or a plugin.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class MigrateException extends Exception
 {
@@ -42,7 +42,7 @@ class MigrateException extends Exception
         $this->ownerHandle = $ownerHandle;
 
         if ($message === null) {
-            $message = 'An error occurred while migrating '.$ownerName.'.';
+            $message = 'An error occurred while migrating ' . $ownerName . '.';
         }
 
         parent::__construct($message, $code, $previous);

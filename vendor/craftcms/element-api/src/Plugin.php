@@ -14,9 +14,8 @@ use yii\base\Event;
  *
  * @property Settings $settings
  * @method Settings getSettings()
- *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since  2.0
+ * @since 2.0
  */
 class Plugin extends \craft\base\Plugin
 {
@@ -46,7 +45,6 @@ class Plugin extends \craft\base\Plugin
      * Returns the endpoint config for a given URL pattern.
      *
      * @param string $pattern
-     *
      * @return callable|array|ResourceAdapterInterface|null
      */
     public function getEndpoint($pattern)
@@ -65,7 +63,7 @@ class Plugin extends \craft\base\Plugin
             return $this->_defaultResourceAdapterConfig;
         }
 
-        return $this->_defaultResourceAdapterConfig = $this->getSettings()->defaults;
+        return $this->_defaultResourceAdapterConfig = $this->getSettings()->getDefaults();
     }
 
     /**
@@ -87,7 +85,6 @@ class Plugin extends \craft\base\Plugin
      * Creates a Fractal resource based on the given config.
      *
      * @param array|ResourceInterface|ResourceAdapterInterface
-     *
      * @return ResourceInterface
      */
     public function createResource($config): ResourceInterface
@@ -99,9 +96,6 @@ class Plugin extends \craft\base\Plugin
         if ($config instanceof ResourceAdapterInterface) {
             return $config->getResource();
         }
-
-        // Merge in the defaults
-        $config = array_merge($this->getDefaultResourceAdapterConfig(), $config);
 
         if (!isset($config['class'])) {
             // Default to ElementResourceAdapter

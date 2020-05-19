@@ -15,37 +15,23 @@ use yii\helpers\Inflector;
 
 /**
  * Security component.
- * An instance of the Security component is globally accessible in Craft via [[\craft\base\ApplicationTrait::getSecurity()|<code>Craft::$app->security</code>]].
+ * An instance of the Security component is globally accessible in Craft via [[\yii\base\Application::getSecurity()|`Craft::$app->security`]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Security extends \yii\base\Security
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var string[] Keywords used to reference sensitive data
      * @see redactIfSensitive()
      */
-    public $sensitiveKeywords = [
-        'key',
-        'pass',
-        'password',
-        'pw',
-        'secret',
-        'tok',
-        'token',
-    ];
+    public $sensitiveKeywords = [];
 
     /**
      * @var mixed
      */
     private $_blowFishHashCost;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      */
@@ -135,7 +121,7 @@ class Security extends \yii\base\Security
      * @throws InvalidConfigException when HMAC generation fails.
      * @see hashData()
      */
-    public function validateData($data, $key = null, $rawHash = false): string
+    public function validateData($data, $key = null, $rawHash = false)
     {
         if ($key === null) {
             $key = Craft::$app->getConfig()->getGeneral()->securityKey;
@@ -150,6 +136,8 @@ class Security extends \yii\base\Security
      * @param string|null $inputKey the input to use for encryption and authentication
      * @param string $info optional context and application specific information, see [[hkdf()]]
      * @return string the encrypted data
+     * @throws InvalidConfigException on OpenSSL not loaded
+     * @throws Exception on OpenSSL error
      * @see decryptByKey()
      * @see encryptByPassword()
      */
@@ -168,6 +156,8 @@ class Security extends \yii\base\Security
      * @param string|null $inputKey the input to use for encryption and authentication
      * @param string $info optional context and application specific information, see [[hkdf()]]
      * @return bool|string the decrypted data or false on authentication failure
+     * @throws InvalidConfigException on OpenSSL not loaded
+     * @throws Exception on OpenSSL error
      * @see encryptByKey()
      */
     public function decryptByKey($data, $inputKey = null, $info = null)
@@ -194,7 +184,7 @@ class Security extends \yii\base\Security
             }
         } else if (
             is_string($value) &&
-            preg_match('/\b('.implode('|', $this->sensitiveKeywords).')\b/', Inflector::camel2words($name, false))
+            preg_match('/\b(' . implode('|', $this->sensitiveKeywords) . ')\b/', Inflector::camel2words($name, false))
         ) {
             $value = str_repeat('•', strlen($value));
         }
