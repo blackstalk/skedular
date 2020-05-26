@@ -3,6 +3,19 @@
     sans-serif;
 }
 
+.bg-app-green {
+  background-color: #59e9df;
+  color: #000;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.text-center {
+  text-align: center;
+}
+
 .fonts-loaded .archivo-black {
   font-family: "ArchivoBlack", sans-serif;
 }
@@ -17,6 +30,21 @@
   transition: 400ms;
   transform: translate3d(0, 0, 0) scale(1);
   opacity: 1;
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+.fade-in {
+  opacity: 0;
+  animation: fadeIn .5s ease-in 1 forwards;
+}
+
+.is-paused {
+  animation-play-state: paused;
 }
 
 @media screen and (min-width: 30em) {

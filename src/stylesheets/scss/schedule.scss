@@ -1,0 +1,65 @@
+.schedule {
+
+    $this: &;
+
+    .lg-text {
+        font-size: 30px;
+    }
+    .md-text {
+        font-size: 22px;
+    }
+    .sm-text {
+        font-size: 16px;
+    }
+    
+    #{$this}-info {
+        background-color: rgba(85, 98, 112, 0.95);
+        padding: 20px;
+        color: #fff;
+    }
+
+    #{$this}-day {
+        padding: 20px;
+        @include box-shadow;
+        margin:25px;
+        background-color: rgba(0,0,0,0.03);
+
+        #{$this}-day--info {
+            padding-bottom: 15px;
+        }
+
+        ul {
+            list-style: none;
+            padding: 5px;
+            
+            li {
+                @include box-shadow;
+                padding: 15px;
+                border-radius: 15px;
+                margin-bottom: 10px;
+                background-color: #fff;
+                #{$this}-day--attendee {
+                    padding: 10px;
+                    border-radius: 50%;
+                    background-color: #fff;
+                    border: 1 solid rgba(0,0,0,0.38);
+                    margin-right: 5px;
+                }
+                #{$this}-day--actions {
+                    padding: 15px 0px 0px;
+
+                    #{$this}-day--attendee {
+                        padding: 5px 15px;
+                        border-radius: 25px;
+                        @include box-shadow;
+                        background-color: #fff;
+                        display: inline-block;
+                        margin: 0px 5px 0px 0px;
+                        cursor: default;
+                    }
+                }
+            }
+        }
+    }
+
+}

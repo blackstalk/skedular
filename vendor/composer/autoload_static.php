@@ -65,8 +65,13 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         array (
             'phpDocumentor\\Reflection\\' => 25,
         ),
+        'n' => 
+        array (
+            'nystudio107\\cookies\\' => 20,
+        ),
         'm' => 
         array (
+            'mmikkel\\cpfieldinspect\\' => 23,
             'mikehaertl\\shellcommand\\' => 24,
         ),
         'e' => 
@@ -82,6 +87,7 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
             'craft\\elementapi\\' => 17,
             'craft\\composer\\' => 15,
             'craft\\' => 6,
+            'chasegiunta\\scss\\' => 17,
             'cebe\\markdown\\' => 14,
         ),
         'X' => 
@@ -141,6 +147,7 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
             'League\\OAuth2\\Client\\' => 21,
             'League\\Fractal\\' => 15,
             'League\\Flysystem\\' => 17,
+            'Leafo\\ScssPhp\\' => 14,
             'Laminas\\ZendFrameworkBridge\\' => 28,
             'Laminas\\Stdlib\\' => 15,
             'Laminas\\Feed\\' => 13,
@@ -280,6 +287,14 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
             1 => __DIR__ . '/..' . '/phpdocumentor/reflection-docblock/src',
             2 => __DIR__ . '/..' . '/phpdocumentor/type-resolver/src',
         ),
+        'nystudio107\\cookies\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/nystudio107/craft-cookies/src',
+        ),
+        'mmikkel\\cpfieldinspect\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/mmikkel/cp-field-inspect/src',
+        ),
         'mikehaertl\\shellcommand\\' => 
         array (
             0 => __DIR__ . '/..' . '/mikehaertl/php-shellcommand/src',
@@ -315,6 +330,10 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         'craft\\' => 
         array (
             0 => __DIR__ . '/..' . '/craftcms/cms/src',
+        ),
+        'chasegiunta\\scss\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/chasegiunta/scss/src',
         ),
         'cebe\\markdown\\' => 
         array (
@@ -455,6 +474,10 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         'League\\Flysystem\\' => 
         array (
             0 => __DIR__ . '/..' . '/league/flysystem/src',
+        ),
+        'Leafo\\ScssPhp\\' => 
+        array (
+            0 => __DIR__ . '/..' . '/leafo/scssphp/src',
         ),
         'Laminas\\ZendFrameworkBridge\\' => 
         array (
@@ -1715,6 +1738,33 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         'Laminas\\ZendFrameworkBridge\\Module' => __DIR__ . '/..' . '/laminas/laminas-zendframework-bridge/src/Module.php',
         'Laminas\\ZendFrameworkBridge\\Replacements' => __DIR__ . '/..' . '/laminas/laminas-zendframework-bridge/src/Replacements.php',
         'Laminas\\ZendFrameworkBridge\\RewriteRules' => __DIR__ . '/..' . '/laminas/laminas-zendframework-bridge/src/RewriteRules.php',
+        'Leafo\\ScssPhp\\Base\\Range' => __DIR__ . '/..' . '/leafo/scssphp/src/Base/Range.php',
+        'Leafo\\ScssPhp\\Block' => __DIR__ . '/..' . '/leafo/scssphp/src/Block.php',
+        'Leafo\\ScssPhp\\Colors' => __DIR__ . '/..' . '/leafo/scssphp/src/Colors.php',
+        'Leafo\\ScssPhp\\Compiler' => __DIR__ . '/..' . '/leafo/scssphp/src/Compiler.php',
+        'Leafo\\ScssPhp\\Compiler\\Environment' => __DIR__ . '/..' . '/leafo/scssphp/src/Compiler/Environment.php',
+        'Leafo\\ScssPhp\\Exception\\CompilerException' => __DIR__ . '/..' . '/leafo/scssphp/src/Exception/CompilerException.php',
+        'Leafo\\ScssPhp\\Exception\\ParserException' => __DIR__ . '/..' . '/leafo/scssphp/src/Exception/ParserException.php',
+        'Leafo\\ScssPhp\\Exception\\RangeException' => __DIR__ . '/..' . '/leafo/scssphp/src/Exception/RangeException.php',
+        'Leafo\\ScssPhp\\Exception\\ServerException' => __DIR__ . '/..' . '/leafo/scssphp/src/Exception/ServerException.php',
+        'Leafo\\ScssPhp\\Formatter' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter.php',
+        'Leafo\\ScssPhp\\Formatter\\Compact' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Compact.php',
+        'Leafo\\ScssPhp\\Formatter\\Compressed' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Compressed.php',
+        'Leafo\\ScssPhp\\Formatter\\Crunched' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Crunched.php',
+        'Leafo\\ScssPhp\\Formatter\\Debug' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Debug.php',
+        'Leafo\\ScssPhp\\Formatter\\Expanded' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Expanded.php',
+        'Leafo\\ScssPhp\\Formatter\\Nested' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/Nested.php',
+        'Leafo\\ScssPhp\\Formatter\\OutputBlock' => __DIR__ . '/..' . '/leafo/scssphp/src/Formatter/OutputBlock.php',
+        'Leafo\\ScssPhp\\Node' => __DIR__ . '/..' . '/leafo/scssphp/src/Node.php',
+        'Leafo\\ScssPhp\\Node\\Number' => __DIR__ . '/..' . '/leafo/scssphp/src/Node/Number.php',
+        'Leafo\\ScssPhp\\Parser' => __DIR__ . '/..' . '/leafo/scssphp/src/Parser.php',
+        'Leafo\\ScssPhp\\SourceMap\\Base64' => __DIR__ . '/..' . '/leafo/scssphp/src/SourceMap/Base64.php',
+        'Leafo\\ScssPhp\\SourceMap\\Base64VLQ' => __DIR__ . '/..' . '/leafo/scssphp/src/SourceMap/Base64VLQ.php',
+        'Leafo\\ScssPhp\\SourceMap\\Base64VLQEncoder' => __DIR__ . '/..' . '/leafo/scssphp/src/SourceMap/Base64VLQEncoder.php',
+        'Leafo\\ScssPhp\\SourceMap\\SourceMapGenerator' => __DIR__ . '/..' . '/leafo/scssphp/src/SourceMap/SourceMapGenerator.php',
+        'Leafo\\ScssPhp\\Type' => __DIR__ . '/..' . '/leafo/scssphp/src/Type.php',
+        'Leafo\\ScssPhp\\Util' => __DIR__ . '/..' . '/leafo/scssphp/src/Util.php',
+        'Leafo\\ScssPhp\\Version' => __DIR__ . '/..' . '/leafo/scssphp/src/Version.php',
         'League\\Flysystem\\AdapterInterface' => __DIR__ . '/..' . '/league/flysystem/src/AdapterInterface.php',
         'League\\Flysystem\\Adapter\\AbstractAdapter' => __DIR__ . '/..' . '/league/flysystem/src/Adapter/AbstractAdapter.php',
         'League\\Flysystem\\Adapter\\AbstractFtpAdapter' => __DIR__ . '/..' . '/league/flysystem/src/Adapter/AbstractFtpAdapter.php',
@@ -3004,6 +3054,12 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         'cebe\\markdown\\tests\\MarkdownTest' => __DIR__ . '/..' . '/cebe/markdown/tests/MarkdownTest.php',
         'cebe\\markdown\\tests\\ParserTest' => __DIR__ . '/..' . '/cebe/markdown/tests/ParserTest.php',
         'cebe\\markdown\\tests\\TestParser' => __DIR__ . '/..' . '/cebe/markdown/tests/ParserTest.php',
+        'chasegiunta\\scss\\Scss' => __DIR__ . '/..' . '/chasegiunta/scss/src/Scss.php',
+        'chasegiunta\\scss\\models\\Settings' => __DIR__ . '/..' . '/chasegiunta/scss/src/models/Settings.php',
+        'chasegiunta\\scss\\services\\ScssService' => __DIR__ . '/..' . '/chasegiunta/scss/src/services/ScssService.php',
+        'chasegiunta\\scss\\twigextensions\\ScssNode' => __DIR__ . '/..' . '/chasegiunta/scss/src/twigextensions/ScssNode.php',
+        'chasegiunta\\scss\\twigextensions\\ScssTokenParser' => __DIR__ . '/..' . '/chasegiunta/scss/src/twigextensions/ScssTokenParser.php',
+        'chasegiunta\\scss\\twigextensions\\ScssTwigExtension' => __DIR__ . '/..' . '/chasegiunta/scss/src/twigextensions/ScssTwigExtension.php',
         'craft\\app\\web\\UrlRule' => __DIR__ . '/..' . '/craftcms/cms/src/app/web/UrlRule.php',
         'craft\\assetpreviews\\Image' => __DIR__ . '/..' . '/craftcms/cms/src/assetpreviews/Image.php',
         'craft\\assetpreviews\\Pdf' => __DIR__ . '/..' . '/craftcms/cms/src/assetpreviews/Pdf.php',
@@ -4056,6 +4112,13 @@ class ComposerStaticInit9f091e70d2586cc83b68c6dd6d85bbd3
         'lessc_formatter_lessjs' => __DIR__ . '/..' . '/marcusschwarz/lesserphp/lessc.inc.php',
         'lessc_parser' => __DIR__ . '/..' . '/marcusschwarz/lesserphp/lessc.inc.php',
         'mikehaertl\\shellcommand\\Command' => __DIR__ . '/..' . '/mikehaertl/php-shellcommand/src/Command.php',
+        'mmikkel\\cpfieldinspect\\CpFieldInspect' => __DIR__ . '/..' . '/mmikkel/cp-field-inspect/src/CpFieldInspect.php',
+        'mmikkel\\cpfieldinspect\\CpFieldInspectBundle' => __DIR__ . '/..' . '/mmikkel/cp-field-inspect/src/CpFieldInspectBundle.php',
+        'mmikkel\\cpfieldinspect\\controllers\\DefaultController' => __DIR__ . '/..' . '/mmikkel/cp-field-inspect/src/controllers/DefaultController.php',
+        'nystudio107\\cookies\\Cookies' => __DIR__ . '/..' . '/nystudio107/craft-cookies/src/Cookies.php',
+        'nystudio107\\cookies\\services\\CookiesService' => __DIR__ . '/..' . '/nystudio107/craft-cookies/src/services/CookiesService.php',
+        'nystudio107\\cookies\\twigextensions\\CookiesTwigExtension' => __DIR__ . '/..' . '/nystudio107/craft-cookies/src/twigextensions/CookiesTwigExtension.php',
+        'nystudio107\\cookies\\variables\\CookiesVariable' => __DIR__ . '/..' . '/nystudio107/craft-cookies/src/variables/CookiesVariable.php',
         'phpDocumentor\\Reflection\\DocBlock' => __DIR__ . '/..' . '/phpdocumentor/reflection-docblock/src/DocBlock.php',
         'phpDocumentor\\Reflection\\DocBlockFactory' => __DIR__ . '/..' . '/phpdocumentor/reflection-docblock/src/DocBlockFactory.php',
         'phpDocumentor\\Reflection\\DocBlockFactoryInterface' => __DIR__ . '/..' . '/phpdocumentor/reflection-docblock/src/DocBlockFactoryInterface.php',

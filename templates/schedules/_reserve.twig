@@ -1,0 +1,112 @@
+{% extends "_layout" %}
+
+{% block main %}
+
+{% macro errorList(errors) %}
+    {% if errors %}
+        <ul class="errors">
+            {% for error in errors %}
+                <li>{{ error }}</li>
+            {% endfor %}
+        </ul>
+    {% endif %}
+{% endmacro %}
+{% if currentUser %}
+{% set currentTimezone = "America/Chicago" %}
+
+	<section class="form text-center">
+			<div class="container">
+				<div class="center">
+                    {% set scheduleId = craft.request.getParam('scheduleId') %}
+                    {% set scheduleEntry = craft.entries({ section: 'schedules', id: scheduleId }) %}
+					<h1 class="f2 f1-l fw2 white-90 mb0 lh-title"><small>You are making a reservation with</small> {{ scheduleEntry.first().title }} <small>for</small> {{ craft.request.getParam('date') }} <small>from</small> {{ craft.request.getParam('timeStart')|date('g:i A') }} <small>to</small> {{ craft.request.getParam('timeEnd')|date('g:i A') }}</h1>
+                        <form method="post" accept-charset="UTF-8">
+                            
+                            {{ csrfInput() }}
+                            {{ actionInput('entries/save-entry') }}
+                            {# <input type="hidden" name="redirect" value="{{ scheduleEntry.first().uri }}"> #}
+                            {# {{ redirectInput('viewentry/{slug}') }} #}
+                            {{ redirectInput( 'app/' ~ scheduleEntry.first().slug ) }}
+                            {{ hiddenInput('sectionId', '8') }}
+                            {{ hiddenInput('enabled', '1') }}
+                            {# {{ hiddenInput('status', 'live') }} #}
+                            {# {{ hiddenInput('reservedUser', currentUser.id) }}
+                            {{ hiddenInput('schedule', scheduleId) }}
+                            {{ hiddenInput('reservationDate', craft.request.getParam('date')) }}
+                            {{ hiddenInput('reservationTime', craft.request.getParam('timeStart')) }} #}
+                            {# {{ hiddenInput('postDate', "now"|date("Y-m-d H:i:s A")) }} #}
+
+                            {% set tz = currentTimezone %}
+
+                            <input type="hidden" name="postDate" value="{{ "now"|date('Y-m-d\\TH:i') }}">
+                            {{ hiddenInput('postDate[timezone]', tz) }}
+
+                            {# {% for user in craft.users %}
+                                {% if user.isCurrent %}
+                                    {{ user.friendlyName }} is you!
+                                {% else %}
+                                    {{ user.friendlyName }} is someone else.
+                                {% endif %}
+                            {% endfor %} #}
+
+                            {% if currentUser %}
+                                Welcome, {{ currentUser.friendlyName }}!
+                            {% endif %}
+
+
+                            <input id="reservedUser" type="hidden" name="fields[reservedUser][]"
+                                {%- if entry is defined %} value="{{ currentUser.id }}"{% endif -%}>
+
+                            {% if entry is defined %}
+                                {{ _self.errorList(entry.getErrors('reservedUser')) }}
+                            {% endif %}
+
+                            <input id="schedule" type="hidden" name="fields[schedule][]"
+                                {%- if entry is defined %} value="{{ scheduleId }}"{% endif -%}>
+
+                            {% if entry is defined %}
+                                {{ _self.errorList(entry.getErrors('schedule')) }}
+                            {% endif %}
+
+                            <input id="reservationDate" type="hidden" name="fields[reservationDate][date]"
+                                {%- if entry is defined %} value="{{ craft.request.getParam('date')|date('n/j/Y') }}"{% endif -%}>
+
+                            {{ hiddenInput('fields[reservationDate][timezone]', tz) }}
+
+                            {% if entry is defined %}
+                                {{ _self.errorList(entry.getErrors('reservationDate')) }}
+                            {% endif %}
+
+                            <input id="reservationTime" type="hidden" name="fields[reservationTime][time]"
+                                {%- if entry is defined %} value="{{ craft.request.getParam('timeStart')|date('g:i A') }}"{% endif -%}>
+                            {{ hiddenInput('fields[reservationTime][timezone]', tz) }}
+
+                            {% if entry is defined %}
+                                {{ _self.errorList(entry.getErrors('reservationTime')) }}
+                            {% endif %}
+
+                            {# Date format: <code>{{ craft.app.locale.getDateFormat('short', 'php') }}</code><br>
+                            Time format: <code>{{ craft.app.locale.getTimeFormat('short', 'php') }}</code> #}
+
+                            {# <label for="body">Body</label>
+                            <textarea id="body" name="fields[body]">
+                                {%- if entry is defined %}{{ entry.body }}{% endif -%}
+                            </textarea>
+
+                            {% if entry is defined %}
+                                {{ _self.errorList(entry.getErrors('body')) }}
+                            {% endif %} #}
+                            <div class="text-center">
+                                <button type="submit">Confirm Reservation</button>
+                            </div>      
+                        </form>
+            </div>
+        </div>
+    </section>
+{# {% elseif %} #}
+
+{% else %}
+
+{% endif %}
+
+{% endblock %}

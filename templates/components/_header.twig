@@ -1,0 +1,31 @@
+{% set currentTimezone = "America/Chicago" %}
+<!-- Navigation -->
+<nav class="slide-menu" id="slide-menu">
+	<ul>
+		<li class="timeline"><a href="/app">Browse Skedules</a></li>
+		<li class="events">
+			<span class="slide-menu--reservations-title">My Reservations</span>
+			<ul class="slide-menu--reservations">
+				{% if currentUser %}
+					{% set hasUpcomingReservations = false %}
+					{% set userReservations = craft.entries({ 
+						section: 'reservations',
+						authorId: currentUser.id
+					}) %}
+					{% for res in userReservations  %}
+						{% if "now"|date("m/d/Y g:i:s a", currentTimezone) < res.reservationTime|date('m/d/Y g:i:s a', currentTimezone) %}
+							{% set hasUpcomingReservations = true %}
+							<li>{{ res.reservationDate|date("F j, Y", currentTimezone) }} at {{ res.reservationTime|date('g:i:s a', currentTimezone) }} with {{ res.schedule.one().title }}</li>
+						{% endif %}
+					{% endfor %}
+					{% if userReservations.count < 1 or hasUpcomingReservations == false %}
+					<li>You don't have any upcoming reservations</li>
+					{% endif %}
+				{% endif %}
+			</ul>
+		</li>
+		{# <li class="calendar">Create A Skedule</li> #}
+		<li class="sep settings">Account Settings</li>
+		{# <li class="logout">Logout</li> #}
+	</ul>
+</nav>

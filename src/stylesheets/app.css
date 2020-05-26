@@ -1,0 +1,73 @@
+body {
+    margin: 0;
+    background: #556270;
+    color: #353d46;
+}
+/* Fonts */
+
+@import url('https://fonts.googleapis.com/css?family=Montserrat');
+@import url('https://fonts.googleapis.com/css?family=Roboto:700');
+/* Positioning */
+
+.container {
+    min-height: 100%;
+}
+
+div#content.home-container {
+    background-color: #353d46;
+}
+
+div#content.home-container .container {
+    text-align: center;
+}
+div#content.home-container .container h2 {
+    hyphens: none;
+}
+.center {
+    top: 50%;
+    left: 50%;
+    position: absolute;
+    transform: translate(-50%, -50%);
+}
+
+.apple {
+    /* Text Background Effect */
+    background: url('../assets/bg-1.jpg');
+    -webkit-background-clip: text;
+    color: transparent;
+    /* Other */
+    font-family: 'Roboto', sans-serif;
+    font-size: 100px;
+    font-weight: 900;
+    background-size: 120%;
+    /* animation: dynamic 2s infinite alternate linear; */
+    white-space: nowrap;
+}
+
+@media screen and (max-width: 480px) {
+    .apple {
+        font-size: 70px;
+    }
+}
+
+/* Slice Animation */
+
+@keyframes slice {
+    0% {
+        line-height: 0%;
+    }
+    100% {
+        line-height: 100%;
+    }
+}
+
+/* Dynamic Background Animation */
+
+@keyframes dynamic {
+    0% {
+        background-size: 100%;
+    }
+    100% {
+        background-position: 200%;
+    }
+}

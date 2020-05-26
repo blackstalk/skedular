@@ -1,0 +1,14 @@
+{% if currentUser %}
+<div class="menu-trigger"></div>
+{% endif %}
+<div class="nav-bar">
+	<h1 class="apple"><a href="/">Skedular</a></h1>
+	<div class="nav-bar--session">
+		{% if currentUser %}
+			<a class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green" href="{{ logoutUrl }}">Logout</a>
+		{% else %}
+			<a class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green" href="{{ loginUrl }}">Login</a>
+			<a class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green" href="/sign-up">Sign Up</a>
+		{% endif %}
+	</div>
+</div>

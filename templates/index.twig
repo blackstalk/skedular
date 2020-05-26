@@ -19,15 +19,31 @@
 
 {% extends "_layout" %}
 {% block main %}
-  <logo></logo>
-  <h1>{{ entry.title }}</h1>
+	<section>
+			<div class="container">
+				<div class="center">
 
-  {{ entry.body }}
+					<h1 class="apple">Skedular</h1>
+					<h2 class="fw1 f3 white-80 mt3 mb4">A post-pandemic scheduling tool for businesses and organizations to manage reservations and help them keep from overbooking.</h2>
+					<logo style="display:none"></logo>
+					<a class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green" href="/app">Find an Organization</a>
+					{% if currentUser %}
+          {% else %}
+          <span class="dib v-mid ph3 white-70 mb3">or</span>
+					<a class="f6 grow no-underline br-pill white ba b--white ph3 pv2 mb3" href="/sign-up">Sign Up</a>
+          {% endif %}
+          {# {{ entry.body }} #}
 
-  <h2>All Organizations</h2>
-  <ul>
-    {% for entry in craft.entries.section('orgs').limit(5).all() %}
-      <li><a href="{{ entry.url }}">{{ entry.title }}</a></li>
-    {% endfor %}
-  </ul>
+					{# <h2>All Organizations</h2>
+					<ul>
+						{% for entry in craft.entries.section('schedules').limit(5).all() %}
+							<li>
+								<a href="{{ entry.url }}">{{ entry.title }}</a>
+							</li>
+						{% endfor %}
+					</ul> #}
+
+				</div>
+			</div>
+	</section>
 {% endblock %}
