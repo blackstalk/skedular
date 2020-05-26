@@ -9,7 +9,11 @@ namespace craft\web;
 
 use Craft;
 use craft\events\ExceptionEvent;
-use yii\base\UserException;
+use Twig\Error\Error as TwigError;
+use Twig\Error\LoaderError as TwigLoaderError;
+use Twig\Error\RuntimeError as TwigRuntimeError;
+use Twig\Error\SyntaxError as TwigSyntaxError;
+use Twig\Template;
 use yii\log\FileTarget;
 use yii\web\HttpException;
 
@@ -17,28 +21,14 @@ use yii\web\HttpException;
  * Class ErrorHandler
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class ErrorHandler extends \yii\web\ErrorHandler
 {
-    // Constants
-    // =========================================================================
-
     /**
      * @event ExceptionEvent The event that is triggered before handling an exception.
      */
     const EVENT_BEFORE_HANDLE_EXCEPTION = 'beforeHandleException';
-
-    // Properties
-    // =========================================================================
-
-    /**
-     * @var bool|null Whether [[renderCallStackItem()]] should render subsequent stack trace items in the event of a Twig error
-     */
-    private $_renderAllCallStackItems;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -53,7 +43,7 @@ class ErrorHandler extends \yii\web\ErrorHandler
         }
 
         // If this is a Twig Runtime exception, use the previous one instead
-        if ($exception instanceof \Twig_Error_Runtime && ($previousException = $exception->getPrevious()) !== null) {
+        if ($exception instanceof TwigRuntimeError && ($previousException = $exception->getPrevious()) !== null) {
             $exception = $previousException;
         }
 
@@ -90,16 +80,16 @@ class ErrorHandler extends \yii\web\ErrorHandler
     public function getExceptionName($exception)
     {
         // Yii isn't translating its own exceptions' names, so meh
-        if ($exception instanceof \Twig_Error) {
-            if ($exception instanceof \Twig_Error_Syntax) {
+        if ($exception instanceof TwigError) {
+            if ($exception instanceof TwigSyntaxError) {
                 return 'Twig Syntax Error';
             }
 
-            if ($exception instanceof \Twig_Error_Loader) {
+            if ($exception instanceof TwigLoaderError) {
                 return 'Twig Template Loading Error';
             }
 
-            if ($exception instanceof \Twig_Error_Runtime) {
+            if ($exception instanceof TwigRuntimeError) {
                 return 'Twig Runtime Error';
             }
         }
@@ -110,45 +100,27 @@ class ErrorHandler extends \yii\web\ErrorHandler
     /**
      * @inheritdoc
      */
-    public function renderCallStackItem($file, $line, $class, $method, $args, $index)
+    public function isCoreFile($file)
     {
-        // Special behavior for Twig errors
-        if ($this->exception instanceof \Twig_Error) {
-            if ($index === 1) {
-                $this->_renderAllCallStackItems = true;
-                $templateLine = $this->exception->getTemplateLine();
-
-                // $templateLine could be null or -1
-                if (is_int($templateLine) && $templateLine > 0) {
-                    $templateSource = $this->exception->getSourceContext();
-                    if ($templateSource !== null) {
-                        $templateFile = $templateSource->getName();
-                        $resolvedTemplate = Craft::$app->getView()->resolveTemplate($templateFile);
-                        if ($resolvedTemplate !== false) {
-                            $file = $resolvedTemplate;
-                            $line = $templateLine;
-                            $this->_renderAllCallStackItems = false;
-                        }
-                    }
-                }
-            } else if ($this->_renderAllCallStackItems === false) {
-                return null;
-            }
+        if (parent::isCoreFile($file)) {
+            return true;
         }
 
-        return parent::renderCallStackItem($file, $line, $class, $method, $args, $index);
+        $file = realpath($file);
+        $pathService = Craft::$app->getPath();
+        return strpos($file, $pathService->getCompiledTemplatesPath() . DIRECTORY_SEPARATOR) === 0 ||
+            strpos($file, $pathService->getVendorPath() . DIRECTORY_SEPARATOR . 'twig' . DIRECTORY_SEPARATOR . 'twig' . DIRECTORY_SEPARATOR) === 0 ||
+            $file === __DIR__ . DIRECTORY_SEPARATOR . 'twig' . DIRECTORY_SEPARATOR . 'Template.php';
     }
-
-    // Protected Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
      */
     protected function renderException($exception)
     {
-        // Treat UserExceptions like normal exceptions when Dev Mode is enabled
-        if (YII_DEBUG && $exception instanceof UserException) {
+        // Show the full exception view for all exceptions when Dev Mode is enabled (don't skip `UserException`s)
+        // or if the user is an admin and has indicated they want to see it
+        if ($this->_showExceptionView()) {
             $this->errorAction = null;
             $this->errorView = $this->exceptionView;
         }
@@ -165,10 +137,10 @@ class ErrorHandler extends \yii\web\ErrorHandler
 
         if ($url === null) {
             if (strpos($class, '__TwigTemplate_') === 0) {
-                $class = \Twig_Template::class;
+                $class = Template::class;
             }
 
-            if (strpos($class, 'Twig_') === 0) {
+            if (strpos($class, 'Twig\\') === 0) {
                 $url = "http://twig.sensiolabs.org/api/2.x/$class.html";
 
                 if ($method) {
@@ -178,5 +150,33 @@ class ErrorHandler extends \yii\web\ErrorHandler
         }
 
         return $url;
+    }
+
+    /**
+     * Returns whether the full exception view should be shown.
+     *
+     * @return bool
+     */
+    private function _showExceptionView(): bool
+    {
+        if (YII_DEBUG) {
+            return true;
+        }
+
+        $user = Craft::$app->getUser()->getIdentity();
+        return (
+            $user &&
+            $user->admin &&
+            $user->getPreference('showExceptionView')
+        );
+    }
+
+    /**
+     * @inheritdoc
+     * @since 3.4.10
+     */
+    protected function shouldRenderSimpleHtml()
+    {
+        return YII_ENV_TEST || (Craft::$app->has('request', true) && Craft::$app->request->getIsAjax());
     }
 }

@@ -8,11 +8,19 @@
 namespace craft\queue;
 
 use Craft;
+use craft\db\Connection;
+use craft\db\Table;
+use craft\helpers\ArrayHelper;
 use craft\helpers\Db;
 use craft\helpers\Json;
+use craft\helpers\StringHelper;
 use craft\helpers\UrlHelper;
 use yii\base\Exception;
+use yii\base\InvalidArgumentException;
+use yii\db\Expression;
 use yii\db\Query;
+use yii\di\Instance;
+use yii\mutex\Mutex;
 use yii\queue\cli\Signal;
 use yii\queue\ExecEvent;
 use yii\web\Response;
@@ -22,28 +30,46 @@ use yii\web\Response;
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Queue extends \yii\queue\cli\Queue implements QueueInterface
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @see isFailed()
      */
     const STATUS_FAILED = 4;
 
-    // Properties
-    // =========================================================================
+    /**
+     * @var Connection|array|string The database connection to use
+     * @since 3.4.0
+     */
+    public $db = 'db';
 
     /**
-     * @var int timeout
+     * @var Mutex|array|string The mutex component to use
+     * @since 3.4.0
+     */
+    public $mutex = 'mutex';
+
+    /**
+     * @var int The time (in seconds) to wait for mutex locks to be released when attempting to reserve new jobs.
      */
     public $mutexTimeout = 3;
 
     /**
-     * @var string command class name
+     * @var string The table name the queue is stored in.
+     * @since 3.4.0
+     */
+    public $tableName = Table::QUEUE;
+
+    /**
+     * @var string The `channel` column value to the queue should use.
+     * @since 3.4.0
+     */
+    public $channel = 'queue';
+
+    /**
+     * @inheritdoc
      */
     public $commandClass = Command::class;
 
@@ -67,15 +93,15 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     private $_listeningForResponse = false;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     public function init()
     {
         parent::init();
+
+        $this->db = Instance::ensure($this->db, Connection::class);
+        $this->mutex = Instance::ensure($this->mutex, Mutex::class);
 
         $this->on(self::EVENT_BEFORE_EXEC, function(ExecEvent $e) {
             $this->_executingJobId = $e->id;
@@ -126,6 +152,7 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
     {
         $payload = $this->_createJobQuery()
             ->select(['fail', 'timeUpdated'])
+            // No need to use andWhere() here since we're fetching by ID
             ->where(['id' => $id])
             ->one();
 
@@ -165,13 +192,14 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function retry(string $id)
     {
-        Craft::$app->getDb()->createCommand()
+        $this->db->createCommand()
             ->update(
-                '{{%queue}}',
+                $this->tableName,
                 [
                     'dateReserved' => null,
                     'timeUpdated' => null,
                     'progress' => 0,
+                    'progressLabel' => null,
                     'attempt' => 0,
                     'fail' => false,
                     'dateFailed' => null,
@@ -187,26 +215,28 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
     /**
      * @inheritdoc
      */
-    public function release(string $id)
+    public function retryAll()
     {
-        Craft::$app->getDb()->createCommand()
-            ->delete('{{%queue}}', ['id' => $id])
-            ->execute();
-    }
+        // Move expired messages into waiting list
+        $this->_moveExpired();
 
-    /**
-     * @inheritdoc
-     */
-    public function setProgress(int $progress)
-    {
-        Craft::$app->getDb()->createCommand()
+        $this->db->createCommand()
             ->update(
-                '{{%queue}}',
+                $this->tableName,
                 [
-                    'progress' => $progress,
-                    'timeUpdated' => time(),
+                    'dateReserved' => null,
+                    'timeUpdated' => null,
+                    'progress' => 0,
+                    'progressLabel' => null,
+                    'attempt' => 0,
+                    'fail' => false,
+                    'dateFailed' => null,
+                    'error' => null,
                 ],
-                ['id' => $this->_executingJobId],
+                [
+                    'channel' => $this->channel,
+                    'fail' => true,
+                ],
                 [],
                 false
             )
@@ -216,8 +246,50 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
     /**
      * @inheritdoc
      */
+    public function release(string $id)
+    {
+        $this->db->createCommand()
+            ->delete($this->tableName, ['id' => $id])
+            ->execute();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function releaseAll()
+    {
+        $this->db->createCommand()
+            ->delete($this->tableName, ['channel' => $this->channel])
+            ->execute();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function setProgress(int $progress, string $label = null)
+    {
+        $data = [
+            'progress' => $progress,
+            'timeUpdated' => time(),
+        ];
+
+        if ($label !== null) {
+            $data['progressLabel'] = $label;
+        }
+
+        $this->db->createCommand()
+            ->update($this->tableName, $data, ['id' => $this->_executingJobId], [], false)
+            ->execute();
+    }
+
+    /**
+     * @inheritdoc
+     */
     public function getHasWaitingJobs(): bool
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createWaitingJobQuery()->exists();
     }
 
@@ -226,6 +298,9 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getHasReservedJobs(): bool
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createReservedJobQuery()->exists();
     }
 
@@ -236,6 +311,9 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getTotalWaiting(): int
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createWaitingJobQuery()->count();
     }
 
@@ -246,6 +324,9 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getTotalDelayed(): int
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createDelayedJobQuery()->count();
     }
 
@@ -256,6 +337,9 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getTotalReserved(): int
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createReservedJobQuery()->count();
     }
 
@@ -266,7 +350,52 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getTotalFailed(): int
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
         return $this->_createFailedJobQuery()->count();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getJobDetails(string $id): array
+    {
+        $result = (new Query())
+            ->from($this->tableName)
+            ->where(['id' => $id])
+            ->one();
+
+        if ($result === false) {
+            throw new InvalidArgumentException("Invalid job ID: $id");
+        }
+
+        $formatter = Craft::$app->getFormatter();
+        $job = $this->serializer->unserialize($this->_jobData($result['job']));
+
+        return ArrayHelper::filterEmptyStringsFromArray([
+            'status' => $this->_status($result),
+            'error' => $result['error'] ?? '',
+            'progress' => $result['progress'],
+            'progressLabel' => $result['progressLabel'],
+            'description' => $result['description'],
+            'job' => $job,
+            'ttr' => (int)$result['ttr'],
+            'Priority' => $result['priority'],
+            'Pushed at' => $result['timePushed'] ? $formatter->asDatetime($result['timePushed']) : '',
+            'Updated at' => $result['timeUpdated'] ? $formatter->asDatetime($result['timeUpdated']) : '',
+            'Failed at' => $result['dateFailed'] ? $formatter->asDatetime($result['dateFailed']) : '',
+        ]);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getTotalJobs()
+    {
+        return $this->_createJobQuery()
+            ->andWhere('[[timePushed]] <= :time - [[delay]]', [':time' => time()])
+            ->count();
     }
 
     /**
@@ -274,10 +403,22 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
      */
     public function getJobInfo(int $limit = null): array
     {
+        // Move expired messages into waiting list
+        $this->_moveExpired();
+
+        // Set up the reserved jobs condition
+        $reservedParams = [];
+        $reservedCondition = $this->db->getQueryBuilder()->buildCondition([
+            'and',
+            ['fail' => false],
+            ['not', ['timeUpdated' => null]],
+        ], $reservedParams);
+
         $results = $this->_createJobQuery()
-            ->select(['id', 'description', 'progress', 'timeUpdated', 'fail', 'error'])
-            ->where('[[timePushed]] <= :time - [[delay]]', [':time' => time()])
-            ->orderBy(['priority' => SORT_ASC, 'id' => SORT_ASC])
+            ->select(['id', 'description', 'progress', 'progressLabel', 'timeUpdated', 'fail', 'error'])
+            ->andWhere('[[timePushed]] <= :time - [[delay]]', [':time' => time()])
+            ->orderBy(new Expression("CASE WHEN $reservedCondition THEN 1 ELSE 0 END DESC", $reservedParams))
+            ->addOrderBy(['priority' => SORT_ASC, 'id' => SORT_ASC])
             ->limit($limit)
             ->all();
 
@@ -288,6 +429,7 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
                 'id' => $result['id'],
                 'status' => $this->_status($result),
                 'progress' => (int)$result['progress'],
+                'progressLabel' => $result['progressLabel'],
                 'description' => $result['description'],
                 'error' => $result['error'],
             ];
@@ -299,24 +441,22 @@ class Queue extends \yii\queue\cli\Queue implements QueueInterface
     /**
      * @inheritdoc
      */
-    public function handleError($id, $job, $ttr, $attempt, $error)
+    public function handleError(ExecEvent $event)
     {
         $this->_executingJobId = null;
 
-        if (parent::handleError($id, $job, $ttr, $attempt, $error)) {
-            // Log the exception
-            Craft::$app->getErrorHandler()->logException($error);
-
+        // Have we given up?
+        if (parent::handleError($event)) {
             // Mark the job as failed
-            Craft::$app->getDb()->createCommand()
+            $this->db->createCommand()
                 ->update(
-                    '{{%queue}}',
+                    $this->tableName,
                     [
                         'fail' => true,
                         'dateFailed' => Db::prepareDateForDb(new \DateTime()),
-                        'error' => $error->getMessage(),
+                        'error' => $event->error ? $event->error->getMessage() : null,
                     ],
-                    ['id' => $id],
+                    ['id' => $event->id],
                     [],
                     false
                 )
@@ -385,30 +525,30 @@ EOD;
         }
     }
 
-    // Protected Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     protected function pushMessage($message, $ttr, $delay, $priority)
     {
-        $db = Craft::$app->getDb();
-        $db->createCommand()
-            ->insert(
-                '{{%queue}}',
-                [
-                    'job' => $message,
-                    'description' => $this->_jobDescription,
-                    'timePushed' => time(),
-                    'ttr' => $ttr,
-                    'delay' => $delay,
-                    'priority' => $priority ?: 1024,
-                ],
-                false)
+        $data = [
+            'job' => $message,
+            'description' => $this->_jobDescription,
+            'timePushed' => time(),
+            'ttr' => $ttr,
+            'delay' => $delay,
+            'priority' => $priority ?: 1024,
+        ];
+
+        // todo: remove this check after the next breakpoint
+        if ($this->db->columnExists($this->tableName, 'channel')) {
+            $data['channel'] = $this->channel;
+        }
+
+        $this->db->createCommand()
+            ->insert($this->tableName, $data, false)
             ->execute();
 
-        return $db->getLastInsertID('{{%queue}}');
+        return $this->db->getLastInsertID($this->tableName);
     }
 
     /**
@@ -417,46 +557,28 @@ EOD;
      */
     protected function reserve()
     {
-        $mutex = Craft::$app->getMutex();
-
-        if (!$mutex->acquire(__CLASS__, $this->mutexTimeout)) {
+        $lockName = __CLASS__ . "::$this->channel";
+        if (!$this->mutex->acquire($lockName, $this->mutexTimeout)) {
             throw new Exception('Has not waited the lock.');
         }
 
-        // Move reserved and not done messages into waiting list
-        $db = Craft::$app->getDb();
-
-        if ($this->_reserveTime !== time()) {
-            $this->_reserveTime = time();
-            $db->createCommand()
-                ->update(
-                    '{{%queue}}',
-                    [
-                        'dateReserved' => null,
-                        'timeUpdated' => null,
-                        'progress' => 0,
-                    ],
-                    '[[timeUpdated]] < :time - [[ttr]]',
-                    [':time' => $this->_reserveTime],
-                    false
-                )
-                ->execute();
-        }
+        // Move expired messages into waiting list
+        $this->_moveExpired();
 
         // Reserve one message
         $payload = $this->_createJobQuery()
-            ->where(['and', ['fail' => false, 'timeUpdated' => null], '[[timePushed]] <= :time - [[delay]]'], [':time' => time()])
+            ->andWhere(['and', ['fail' => false, 'timeUpdated' => null], '[[timePushed]] <= :time - [[delay]]'], [':time' => time()])
             ->orderBy(['priority' => SORT_ASC, 'id' => SORT_ASC])
             ->limit(1)
-            ->one($db);
+            ->one();
 
         if (is_array($payload)) {
             $payload['dateReserved'] = new \DateTime();
             $payload['timeUpdated'] = $payload['dateReserved']->getTimestamp();
             $payload['attempt'] = (int)$payload['attempt'] + 1;
-            $db->createCommand()
+            $this->db->createCommand()
                 ->update(
-                    '{{%queue}}',
+                    $this->tableName,
                     [
                         'dateReserved' => Db::prepareDateForDb($payload['dateReserved']),
                         'timeUpdated' => $payload['timeUpdated'],
@@ -469,18 +591,68 @@ EOD;
                 ->execute();
         }
 
-        $mutex->release(__CLASS__);
+        $this->mutex->release($lockName);
 
         // pgsql
-        if (is_array($payload) && is_resource($payload['job'])) {
-            $payload['job'] = stream_get_contents($payload['job']);
+        if (is_array($payload)) {
+            $payload['job'] = $this->_jobData($payload['job']);
         }
 
         return $payload;
     }
 
-    // Private Methods
-    // =========================================================================
+    /**
+     * Checks if $job is a resource and if so, convert it to a serialized format.
+     *
+     * @param string|resource $job
+     * @return string
+     */
+    private function _jobData($job)
+    {
+        if (is_resource($job)) {
+            $job = stream_get_contents($job);
+
+            if (is_string($job) && strpos($job, 'x') === 0) {
+                $hex = substr($job, 1);
+                if (StringHelper::isHexadecimal($hex)) {
+                    $job = hex2bin($hex);
+                }
+            }
+        }
+
+        return $job;
+    }
+
+    /**
+     * Moves expired messages into waiting list.
+     */
+    private function _moveExpired()
+    {
+        if ($this->_reserveTime !== time()) {
+            $this->_reserveTime = time();
+            $this->db->createCommand()
+                ->update(
+                    $this->tableName,
+                    [
+                        'dateReserved' => null,
+                        'timeUpdated' => null,
+                        'progress' => 0,
+                        'progressLabel' => null,
+                    ],
+                    [
+                        'and',
+                        [
+                            'channel' => $this->channel,
+                            'fail' => false
+                        ],
+                        '[[timeUpdated]] < :time - [[ttr]]',
+                    ],
+                    [':time' => $this->_reserveTime],
+                    false
+                )
+                ->execute();
+        }
+    }
 
     /**
      * Returns a new query for jobs.
@@ -490,7 +662,8 @@ EOD;
     private function _createJobQuery(): Query
     {
         return (new Query())
-            ->from('{{%queue}}');
+            ->from($this->tableName)
+            ->where(['channel' => $this->channel]);
     }
 
     /**
@@ -501,7 +674,8 @@ EOD;
     private function _createWaitingJobQuery(): Query
     {
         return $this->_createJobQuery()
-            ->where(['fail' => false, 'timeUpdated' => null, 'delay' => 0]);
+            ->andWhere(['fail' => false, 'timeUpdated' => null])
+            ->andWhere('[[timePushed]] + [[delay]] <= :time', ['time' => time()]);
     }
 
     /**
@@ -512,7 +686,8 @@ EOD;
     private function _createDelayedJobQuery(): Query
     {
         return $this->_createJobQuery()
-            ->where(['and', ['fail' => false, 'timeUpdated' => null], ['>', 'delay', 0]]);
+            ->andWhere(['fail' => false, 'timeUpdated' => null])
+            ->andWhere('[[timePushed]] + [[delay]] > :time', ['time' => time()]);
     }
 
     /**
@@ -523,7 +698,7 @@ EOD;
     private function _createReservedJobQuery(): Query
     {
         return $this->_createJobQuery()
-            ->where(['and', ['fail' => false], ['not', ['timeUpdated' => null]]]);
+            ->andWhere(['and', ['fail' => false], ['not', ['timeUpdated' => null]]]);
     }
 
     /**
@@ -534,7 +709,7 @@ EOD;
     private function _createFailedJobQuery(): Query
     {
         return $this->_createJobQuery()
-            ->where(['fail' => true]);
+            ->andWhere(['fail' => true]);
     }
 
     /**
@@ -558,26 +733,5 @@ EOD;
         }
 
         return self::STATUS_RESERVED;
-    }
-
-    /**
-     * Closes the connection with the client and turns the request into a worker.
-     *
-     * @see handleResponse()
-     */
-    private function _closeRequestAndRun()
-    {
-        // Make sure nothing has been output to the browser yet
-        if (headers_sent()) {
-            return;
-        }
-
-        // Close the client connection
-        $response = Craft::$app->getResponse();
-        $response->content = '1';
-        $response->sendAndClose();
-
-        // Run any pending jobs
-        $this->run();
     }
 }

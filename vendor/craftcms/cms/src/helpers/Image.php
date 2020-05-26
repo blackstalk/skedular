@@ -10,24 +10,19 @@ namespace craft\helpers;
 use Craft;
 use craft\errors\ImageException;
 use craft\image\Svg;
+use yii\base\InvalidArgumentException;
 
 /**
  * Class Image
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Image
 {
-    // Constants
-    // =========================================================================
-
     const EXIF_IFD0_ROTATE_180 = 3;
     const EXIF_IFD0_ROTATE_90 = 6;
     const EXIF_IFD0_ROTATE_270 = 8;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Calculates a missing target dimension for an image.
@@ -40,15 +35,26 @@ class Image
      */
     public static function calculateMissingDimension($targetWidth, $targetHeight, $sourceWidth, $sourceHeight): array
     {
-        $factor = $sourceWidth / $sourceHeight;
-
-        if (empty($targetHeight)) {
-            $targetHeight = ceil($targetWidth / $factor);
-        } else if (empty($targetWidth)) {
-            $targetWidth = ceil($targetHeight * $factor);
+        // If the target width & height are both present, return them
+        if ($targetWidth && $targetHeight) {
+            return [(int)$targetWidth, (int)$targetHeight];
         }
 
-        return [(int)$targetWidth, (int)$targetHeight];
+        // Make sure that there's a source width/height
+        if (!$sourceWidth || !$sourceHeight) {
+            throw new InvalidArgumentException('Image missing its width or height');
+        }
+
+        // If neither were supplied, just use the source dimensions
+        if (!$targetWidth && !$targetHeight) {
+            return [(int)$sourceWidth, (int)$sourceHeight];
+        }
+
+        // Fill in the blank
+        return [
+            (int)($targetWidth ?: ceil($targetHeight * ($sourceWidth / $sourceHeight))),
+            (int)($targetHeight ?: ceil($targetWidth * ($sourceHeight / $sourceWidth))),
+        ];
     }
 
     /**
@@ -62,7 +68,7 @@ class Image
         $formats = Craft::$app->getImages()->getSupportedImageFormats();
 
         $alwaysManipulatable = ['svg'];
-        $neverManipulatable = ['pdf'];
+        $neverManipulatable = ['pdf', 'json', 'html', 'htm'];
 
         $formats = array_merge($formats, $alwaysManipulatable);
         $formats = array_diff($formats, $neverManipulatable);
@@ -82,14 +88,15 @@ class Image
 
     /**
      * Returns any info that’s embedded in a given PNG file.
+     *
      * Adapted from https://github.com/ktomk/Miscellaneous/tree/master/get_png_imageinfo.
      *
      * @param string $file The path to the PNG file.
-     * @author Tom Klingenberg <lastflood.net>
+     * @return array|bool Info embedded in the PNG file, or `false` if it wasn’t found.
      * @license Apache 2.0
      * @version 0.1.0
      * @link http://www.libpng.org/pub/png/spec/iso/index-object.html#11IHDR
-     * @return array|bool Info embedded in the PNG file, or `false` if it wasn’t found.
+     * @author Tom Klingenberg <lastflood.net>
      */
     public static function pngImageInfo(string $file)
     {
@@ -155,7 +162,7 @@ class Image
     {
         $extension = pathinfo($filePath, PATHINFO_EXTENSION);
 
-        return in_array(StringHelper::toLowerCase($extension), ['jpg', 'jpeg', 'tiff'], true);
+        return in_array(strtolower($extension), ['jpg', 'jpeg', 'tiff'], true);
     }
 
     /**
@@ -180,13 +187,17 @@ class Image
      */
     public static function imageSize(string $filePath): array
     {
-        if (FileHelper::isSvg($filePath)) {
-            $svg = file_get_contents($filePath);
-            return static::parseSvgSize($svg);
-        }
+        try {
+            if (FileHelper::isSvg($filePath)) {
+                $svg = file_get_contents($filePath);
+                return static::parseSvgSize($svg);
+            }
 
-        $image = Craft::$app->getImages()->loadImage($filePath);
-        return [$image->getWidth(), $image->getHeight()];
+            $image = Craft::$app->getImages()->loadImage($filePath);
+            return [$image->getWidth(), $image->getHeight()];
+        } catch (\Throwable $exception) {
+            return [0, 0];
+        }
     }
 
     /**
@@ -209,7 +220,7 @@ class Image
         // JPG 2 byte signature 0xFF 0xD8
 
         // It's much easier to work with a HEX string here, because of variable signature lengths
-        $signature = StringHelper::toUpperCase(bin2hex(stream_get_contents($stream, 2)));
+        $signature = mb_strtoupper(bin2hex(stream_get_contents($stream, 2)));
 
         try {
             switch ($signature) {
@@ -260,7 +271,7 @@ class Image
                     break;
                 // Maybe PNG
                 case '8950':
-                    $signature .= StringHelper::toUpperCase(bin2hex(stream_get_contents($stream, 6)));
+                    $signature .= mb_strtoupper(bin2hex(stream_get_contents($stream, 6)));
 
                     // Make sure it's PNG
                     if ($signature !== '89504E470D0A1A0A') {
@@ -323,8 +334,31 @@ class Image
         return [$width, $height];
     }
 
-    // Private Methods
-    // =========================================================================
+    /**
+     * Clean EXIF data from an image loaded inside an Imagick instance, taking
+     * care not to wipe the ICC profile.
+     *
+     * @param \Imagick $imagick
+     */
+    public static function cleanExifDataFromImagickImage(\Imagick $imagick)
+    {
+        $config = Craft::$app->getConfig()->getGeneral();
+
+        if (!$config->preserveExifData) {
+            $iccProfiles = null;
+            $supportsImageProfiles = method_exists($imagick, 'getimageprofiles');
+
+            if ($config->preserveImageColorProfiles && $supportsImageProfiles) {
+                $iccProfiles = $imagick->getImageProfiles("icc", true);
+            }
+
+            $imagick->stripImage();
+
+            if (!empty($iccProfiles)) {
+                $imagick->profileImage("icc", $iccProfiles['icc'] ?? '');
+            }
+        }
+    }
 
     /**
      * Returns the multiplier that should be used to convert an image size unit to pixels.
@@ -337,8 +371,6 @@ class Image
         $ppi = 72;
 
         switch ($unit) {
-            case 'px':
-                return 1;
             case 'in':
                 return $ppi;
             case 'pt':

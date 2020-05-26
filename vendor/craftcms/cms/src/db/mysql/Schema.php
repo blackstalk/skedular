@@ -8,36 +8,36 @@
 namespace craft\db\mysql;
 
 use Craft;
+use craft\db\Connection;
 use craft\db\TableSchema;
+use craft\helpers\Db;
 use craft\helpers\FileHelper;
+use yii\base\ErrorException;
 use yii\db\Exception;
 
 /**
  * @inheritdoc
  * @method TableSchema getTableSchema($name, $refresh = false) Obtains the schema information for the named table.
+ * @property Connection $db
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Schema extends \yii\db\mysql\Schema
 {
-    // Constants
-    // =========================================================================
-
     const TYPE_TINYTEXT = 'tinytext';
     const TYPE_MEDIUMTEXT = 'mediumtext';
     const TYPE_LONGTEXT = 'longtext';
     const TYPE_ENUM = 'enum';
 
-    // Properties
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public $columnSchemaClass = ColumnSchema::class;
 
     /**
      * @var int The maximum length that objects' names can be.
      */
     public $maxObjectNameLength = 64;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -54,6 +54,7 @@ class Schema extends \yii\db\mysql\Schema
 
     /**
      * Creates a query builder for the database.
+     *
      * This method may be overridden by child classes to create a DBMS-specific query builder.
      *
      * @return QueryBuilder query builder instance
@@ -73,7 +74,7 @@ class Schema extends \yii\db\mysql\Schema
      */
     public function quoteDatabaseName(string $name): string
     {
-        return '`'.$name.'`';
+        return '`' . $name . '`';
     }
 
     /**
@@ -89,7 +90,7 @@ class Schema extends \yii\db\mysql\Schema
         } catch (Exception $e) {
             // Specifically look for a "SAVEPOINT does not exist" error.
             if ($e->getCode() == 42000 && isset($e->errorInfo[1]) && $e->errorInfo[1] == 1305) {
-                Craft::warning('Tried to release a savepoint, but it does not exist: '.$e->getMessage(), __METHOD__);
+                Craft::warning('Tried to release a savepoint, but it does not exist: ' . $e->getMessage(), __METHOD__);
             } else {
                 throw $e;
             }
@@ -109,7 +110,7 @@ class Schema extends \yii\db\mysql\Schema
         } catch (Exception $e) {
             // Specifically look for a "SAVEPOINT does not exist" error.
             if ($e->getCode() == 42000 && isset($e->errorInfo[1]) && $e->errorInfo[1] == 1305) {
-                Craft::warning('Tried to roll back a savepoint, but it does not exist: '.$e->getMessage(), __METHOD__);
+                Craft::warning('Tried to roll back a savepoint, but it does not exist: ' . $e->getMessage(), __METHOD__);
             } else {
                 throw $e;
             }
@@ -117,7 +118,13 @@ class Schema extends \yii\db\mysql\Schema
     }
 
     /**
-     * @inheritdoc
+     * Create a column schema builder instance giving the type and value precision.
+     *
+     * This method may be overridden by child classes to create a DBMS-specific column schema builder.
+     *
+     * @param string $type type of the column. See [[ColumnSchemaBuilder::$type]].
+     * @param int|string|array $length length or precision of the column. See [[ColumnSchemaBuilder::$length]].
+     * @return ColumnSchemaBuilder column schema builder instance
      */
     public function createColumnSchemaBuilder($type, $length = null)
     {
@@ -127,78 +134,79 @@ class Schema extends \yii\db\mysql\Schema
     /**
      * Returns the default backup command to execute.
      *
+     * @param string[]|null The table names whose data should be excluded from the backup
      * @return string The command to execute
+     * @throws ErrorException
      */
-    public function getDefaultBackupCommand(): string
+    public function getDefaultBackupCommand(array $ignoreTables = null): string
     {
-        $defaultTableIgnoreList = [
-            '{{%assetindexdata}}',
-            '{{%assettransformindex}}',
-            '{{%cache}}',
-            '{{%sessions}}',
-            '{{%templatecaches}}',
-            '{{%templatecachecriteria}}',
-            '{{%templatecacheelements}}',
-        ];
-
-        $dbSchema = Craft::$app->getDb()->getSchema();
-
-        foreach ($defaultTableIgnoreList as $key => $ignoreTable) {
-            $defaultTableIgnoreList[$key] = ' --ignore-table={database}.'.$dbSchema->getRawTableName($ignoreTable);
-        }
-
         $defaultArgs =
-            ' --defaults-extra-file="'.$this->_createDumpConfigFile().'"'.
-            ' --add-drop-table'.
-            ' --comments'.
-            ' --create-options'.
-            ' --dump-date'.
-            ' --no-autocommit'.
-            ' --routines'.
-            ' --set-charset'.
+            ' --defaults-extra-file="' . $this->_createDumpConfigFile() . '"' .
+            ' --add-drop-table' .
+            ' --comments' .
+            ' --create-options' .
+            ' --dump-date' .
+            ' --no-autocommit' .
+            ' --routines' .
+            ' --default-character-set=' . Craft::$app->getConfig()->getDb()->charset .
+            ' --set-charset' .
             ' --triggers';
 
-        $schemaDump = 'mysqldump'.
-            $defaultArgs.
-            ' --single-transaction'.
-            ' --no-data'.
-            ' --result-file="{file}"'.
+        if ($ignoreTables === null) {
+            $ignoreTables = $this->db->getIgnoredBackupTables();
+        }
+        $ignoreTableArgs = [];
+        foreach ($ignoreTables as $table) {
+            $table = $this->getRawTableName($table);
+            $ignoreTableArgs[] = "--ignore-table={database}.{$table}";
+        }
+
+        $schemaDump = 'mysqldump' .
+            $defaultArgs .
+            ' --single-transaction' .
+            ' --no-data' .
+            ' --result-file="{file}"' .
             ' {database}';
 
-        $dataDump = 'mysqldump'.
-            $defaultArgs.
-            ' --no-create-info'.
-            implode('', $defaultTableIgnoreList).
-            ' {database}'.
+        $dataDump = 'mysqldump' .
+            $defaultArgs .
+            ' --no-create-info' .
+            ' ' . implode(' ', $ignoreTableArgs) .
+            ' {database}' .
             ' >> "{file}"';
 
-        return $schemaDump.' && '.$dataDump;
+        return $schemaDump . ' && ' . $dataDump;
     }
 
     /**
      * Returns the default database restore command to execute.
      *
      * @return string The command to execute
+     * @throws ErrorException
      */
     public function getDefaultRestoreCommand(): string
     {
-        return 'mysqldump'.
-            ' --defaults-extra-file="'.$this->_createDumpConfigFile().'"'.
-            ' {database}'.
+        return 'mysql' .
+            ' --defaults-extra-file="' . $this->_createDumpConfigFile() . '"' .
+            ' {database}' .
             ' < "{file}"';
     }
 
     /**
      * Returns all indexes for the given table. Each array element is of the following structure:
+     *
      * ```php
      * [
-     *     'IndexName1' => ['col1' [, ...]],
-     *     'IndexName2' => ['col2' [, ...]],
+     *     'IndexName' => [
+     *         'columns' => ['col1' [, ...]],
+     *         'unique' => false
+     *     ],
      * ]
      * ```
      *
      * @param string $tableName The name of the table to get the indexes for.
      * @return array All indexes for the given table.
+     * @throws \yii\base\NotSupportedException
      */
     public function findIndexes(string $tableName): array
     {
@@ -207,26 +215,27 @@ class Schema extends \yii\db\mysql\Schema
         $sql = $this->getCreateTableSql($table);
         $indexes = [];
 
-        $regexp = '/KEY\s+([^\(\s]+)\s*\(([^\(\)]+)\)/mi';
+        $regexp = '/(UNIQUE\s+)?KEY\s+([^\(\s]+)\s*\(([^\(\)]+)\)/mi';
         if (preg_match_all($regexp, $sql, $matches, PREG_SET_ORDER)) {
             foreach ($matches as $match) {
-                $indexName = str_replace('`', '', $match[1]);
-                $indexColumns = array_map('trim', explode(',', str_replace('`', '', $match[2])));
-                $indexes[$indexName] = $indexColumns;
+                $indexName = str_replace('`', '', $match[2]);
+                $indexColumns = array_map('trim', explode(',', str_replace('`', '', $match[3])));
+                $indexes[$indexName] = [
+                    'columns' => $indexColumns,
+                    'unique' => !empty($match[1]),
+                ];
             }
         }
 
         return $indexes;
     }
 
-    // Protected Methods
-    // =========================================================================
-
     /**
      * Loads the metadata for the specified table.
      *
      * @param string $name table name
      * @return TableSchema|null driver dependent table metadata. Null if the table does not exist.
+     * @throws \Exception
      */
     protected function loadTableSchema($name)
     {
@@ -246,6 +255,7 @@ class Schema extends \yii\db\mysql\Schema
      * Collects extra foreign key information details for the given table.
      *
      * @param TableSchema $table the table metadata
+     * @throws Exception
      */
     protected function findConstraints($table)
     {
@@ -284,26 +294,33 @@ SQL;
         }
     }
 
-    // Private Methods
-    // =========================================================================
-
     /**
      * Creates a temporary my.cnf file based on the DB config settings.
      *
      * @return string The path to the my.cnf file
+     * @throws ErrorException
      */
     private function _createDumpConfigFile(): string
     {
-        $filePath = Craft::$app->getPath()->getTempPath().DIRECTORY_SEPARATOR.'my.cnf';
+        $filePath = Craft::$app->getPath()->getTempPath() . DIRECTORY_SEPARATOR . 'my.cnf';
 
-        $dbConfig = Craft::$app->getConfig()->getDb();
-        $contents = '[client]'.PHP_EOL.
-            'user='.$dbConfig->user.PHP_EOL.
-            'password="'.addslashes($dbConfig->password).'"'.PHP_EOL.
-            'host='.$dbConfig->server.PHP_EOL.
-            'port='.$dbConfig->port;
+        $parsed = Db::parseDsn($this->db->dsn);
+        $username = $this->db->getIsPgsql() && !empty($parsed['user']) ? $parsed['user'] : $this->db->username;
+        $password = $this->db->getIsPgsql() && !empty($parsed['password']) ? $parsed['password'] : $this->db->password;
+        $contents = '[client]' . PHP_EOL .
+            'user=' . $username . PHP_EOL .
+            'password="' . addslashes($password) . '"' . PHP_EOL .
+            'host=' . ($parsed['host'] ?? '') . PHP_EOL .
+            'port=' . ($parsed['port'] ?? '');
+
+        if (isset($parsed['unix_socket'])) {
+            $contents .= PHP_EOL . 'socket=' . $parsed['unix_socket'];
+        }
 
         FileHelper::writeToFile($filePath, $contents);
+
+        // Avoid a “world-writable config file 'my.cnf' is ignored” warning
+        chmod($filePath, 0644);
 
         return $filePath;
     }

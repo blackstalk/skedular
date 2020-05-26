@@ -24,13 +24,10 @@ use yii\web\ServerErrorHttpException;
  * Note that all actions in the controller require an authenticated Craft session via [[allowAnonymous]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class SitesController extends Controller
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -38,6 +35,8 @@ class SitesController extends Controller
     {
         // All actions require an admin account
         $this->requireAdmin();
+
+        parent::init();
     }
 
     /**
@@ -54,7 +53,7 @@ class SitesController extends Controller
 
         if ($groupId) {
             if (($group = $sitesService->getGroupById($groupId)) === null) {
-                throw new NotFoundHttpException('Invalid site group ID: '.$groupId);
+                throw new NotFoundHttpException('Invalid site group ID: ' . $groupId);
             }
             $sites = $sitesService->getSitesByGroupId($groupId);
         } else {
@@ -171,7 +170,7 @@ class SitesController extends Controller
                 }
             }
 
-            $title = $site->name;
+            $title = trim($site->name) ?: Craft::t('app', 'Edit Site');
         } else {
             if ($site === null) {
                 $site = new Site();
@@ -258,8 +257,15 @@ class SitesController extends Controller
         $this->requirePostRequest();
         $request = Craft::$app->getRequest();
 
-        $site = new Site();
-        $site->id = $request->getBodyParam('siteId');
+        $siteId = $request->getBodyParam('siteId');
+
+        if ($siteId) {
+            $site = Craft::$app->getSites()->getSiteById($siteId);
+        } else {
+            $site = new Site();
+            $site->id = $request->getBodyParam('siteId');
+        }
+
         $site->groupId = $request->getBodyParam('group');
         $site->name = $request->getBodyParam('name');
         $site->handle = $request->getBodyParam('handle');

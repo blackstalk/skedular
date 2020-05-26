@@ -1,0 +1,20 @@
+.slide-menu {
+
+    $self: &;
+
+    .events {
+        cursor: default;
+        ul {
+            li {
+                font-size: 13px;
+                margin-left: 50px;
+                hyphens: none;
+                cursor: default;
+            }
+        }
+    }
+
+    #{$self}--reservations {
+
+    }
+}

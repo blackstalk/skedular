@@ -15,7 +15,7 @@ use craft\web\Controller;
 use craft\web\UploadedFile;
 use yii\web\Response;
 
-Craft::$app->requireEdition(Craft::Client);
+Craft::$app->requireEdition(Craft::Pro);
 
 /**
  * The RebrandController class is a controller that handles various control panel re-branding tasks such as uploading,
@@ -23,22 +23,17 @@ Craft::$app->requireEdition(Craft::Client);
  * Note that all actions in the controller require an authenticated Craft session via [[allowAnonymous]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class RebrandController extends Controller
 {
     /**
-     * Allowed types of site images.
-     *
-     * @var array
+     * @var array Allowed types of site images.
      */
     private $_allowedTypes = ['logo', 'icon'];
 
-    // Public Methods
-    // =========================================================================
-
     /**
-     * Handles Control Panel logo and site icon uploads.
+     * Handles control panel logo and site icon uploads.
      *
      * @return Response
      */
@@ -63,7 +58,7 @@ class RebrandController extends Controller
             return $this->asErrorJson(Craft::t('app', 'The uploaded file is not an image.'));
         }
 
-        $targetPath = Craft::$app->getPath()->getRebrandPath().'/'.$type.'/';
+        $targetPath = Craft::$app->getPath()->getRebrandPath() . '/' . $type . '/';
 
         if (!is_dir($targetPath)) {
             FileHelper::createDirectory($targetPath);
@@ -71,14 +66,14 @@ class RebrandController extends Controller
             FileHelper::clearDirectory($targetPath);
         }
 
-        $fileDestination = $targetPath.'/'.$filename;
+        $fileDestination = $targetPath . '/' . $filename;
 
         move_uploaded_file($file->tempName, $fileDestination);
 
         $imagesService = Craft::$app->getImages();
-        $imagesService->cleanImage($fileDestination);
+        Image::cleanImageByPath($fileDestination);
         $imagesService->loadImage($fileDestination)->scaleToFit(300, 300)->saveAs($fileDestination);
-        $html = $this->getView()->renderTemplate('settings/general/_images/'.$type);
+        $html = $this->getView()->renderTemplate('settings/general/_images/' . $type);
 
         return $this->asJson([
             'html' => $html,
@@ -86,7 +81,7 @@ class RebrandController extends Controller
     }
 
     /**
-     * Deletes Control Panel logo and site icon images.
+     * Deletes control panel logo and site icon images.
      *
      * @return Response
      */
@@ -99,9 +94,9 @@ class RebrandController extends Controller
             $this->asErrorJson(Craft::t('app', 'That is not an allowed image type.'));
         }
 
-        FileHelper::clearDirectory(Craft::$app->getPath()->getRebrandPath().'/'.$type);
+        FileHelper::clearDirectory(Craft::$app->getPath()->getRebrandPath() . '/' . $type);
 
-        $html = $this->getView()->renderTemplate('settings/general/_images/'.$type);
+        $html = $this->getView()->renderTemplate('settings/general/_images/' . $type);
 
         return $this->asJson([
             'html' => $html,

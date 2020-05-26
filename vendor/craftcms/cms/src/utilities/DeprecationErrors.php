@@ -15,19 +15,16 @@ use craft\web\assets\deprecationerrors\DeprecationErrorsAsset;
  * DeprecationErrors represents a DeprecationErrors dashboard widget.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class DeprecationErrors extends Utility
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     public static function displayName(): string
     {
-        return Craft::t('app', 'Deprecation Errors');
+        return Craft::t('app', 'Deprecation Warnings');
     }
 
     /**

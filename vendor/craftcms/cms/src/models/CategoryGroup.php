@@ -22,13 +22,10 @@ use craft\validators\UniqueValidator;
  * @property CategoryGroup_SiteSettings[] $siteSettings Site-specific settings
  * @mixin FieldLayoutBehavior
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class CategoryGroup extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -60,39 +57,52 @@ class CategoryGroup extends Model
     public $maxLevels;
 
     /**
+     * @var string|null UID
+     */
+    public $uid;
+
+    /**
      * @var
      */
     private $_siteSettings;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
      */
     public function behaviors()
     {
+        $behaviors = parent::behaviors();
+        $behaviors['fieldLayout'] = [
+            'class' => FieldLayoutBehavior::class,
+            'elementType' => Category::class,
+        ];
+        return $behaviors;
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function attributeLabels()
+    {
         return [
-            'fieldLayout' => [
-                'class' => FieldLayoutBehavior::class,
-                'elementType' => Category::class
-            ],
+            'handle' => Craft::t('app', 'Handle'),
+            'name' => Craft::t('app', 'Name'),
         ];
     }
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        return [
-            [['id', 'structureId', 'fieldLayoutId', 'maxLevels'], 'number', 'integerOnly' => true],
-            [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']],
-            [['name', 'handle'], UniqueValidator::class, 'targetClass' => CategoryGroupRecord::class],
-            [['name', 'handle', 'siteSettings'], 'required'],
-            [['name', 'handle'], 'string', 'max' => 255],
-            [['siteSettings'], 'validateSiteSettings'],
-        ];
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'structureId', 'fieldLayoutId', 'maxLevels'], 'number', 'integerOnly' => true];
+        $rules[] = [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']];
+        $rules[] = [['name', 'handle'], UniqueValidator::class, 'targetClass' => CategoryGroupRecord::class];
+        $rules[] = [['name', 'handle', 'siteSettings'], 'required'];
+        $rules[] = [['name', 'handle'], 'string', 'max' => 255];
+        $rules[] = [['siteSettings'], 'validateSiteSettings'];
+        return $rules;
     }
 
     /**
@@ -114,7 +124,7 @@ class CategoryGroup extends Model
      */
     public function __toString(): string
     {
-        return Craft::t('site', $this->name);
+        return Craft::t('site', $this->name) ?: static::class;
     }
 
     /**

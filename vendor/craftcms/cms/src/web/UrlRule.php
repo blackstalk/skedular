@@ -9,17 +9,15 @@ namespace craft\web;
 
 use Craft;
 use craft\helpers\ArrayHelper;
+use craft\helpers\StringHelper;
 
 /**
  * @inheritdoc
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class UrlRule extends \yii\web\UrlRule
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var array Pattern tokens that will be swapped out at runtime.
      */
@@ -29,9 +27,6 @@ class UrlRule extends \yii\web\UrlRule
      * @var array Parameters that should be passed to the controller.
      */
     public $params = [];
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Constructor.
@@ -65,7 +60,8 @@ class UrlRule extends \yii\web\UrlRule
                 // Reference: http://www.regular-expressions.info/unicode.html
                 self::$_regexTokens = [
                     '{handle}' => '(?:[a-zA-Z][a-zA-Z0-9_]*)',
-                    '{slug}' => '(?:[\p{L}\p{N}\p{M}'.preg_quote(implode($slugChars), '/').']+)',
+                    '{slug}' => '(?:[\p{L}\p{N}\p{M}' . preg_quote(implode($slugChars), '/') . ']+)',
+                    '{uid}' => StringHelper::UUID_PATTERN,
                 ];
             }
 

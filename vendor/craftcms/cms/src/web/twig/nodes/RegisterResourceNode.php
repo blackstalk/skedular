@@ -8,23 +8,23 @@
 namespace craft\web\twig\nodes;
 
 use craft\web\View;
+use Twig\Compiler;
+use Twig\Node\Node;
+use Twig\Node\NodeCaptureInterface;
 use yii\base\NotSupportedException;
 
 /**
  * Class RegisterResourceNode
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class RegisterResourceNode extends \Twig_Node implements \Twig_NodeCaptureInterface
+class RegisterResourceNode extends Node implements NodeCaptureInterface
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
-    public function compile(\Twig_Compiler $compiler)
+    public function compile(Compiler $compiler)
     {
         $method = $this->getAttribute('method');
         $position = $this->getAttribute('position');
@@ -58,22 +58,27 @@ class RegisterResourceNode extends \Twig_Node implements \Twig_NodeCaptureInterf
             // Figure out what the position's PHP value is
             switch ($position) {
                 case 'head':
+                case 'POS_HEAD':
                     $positionPhp = View::POS_HEAD;
                     break;
                 case 'beginBody':
+                case 'POS_BEGIN':
                     $positionPhp = View::POS_BEGIN;
                     break;
                 case 'endBody':
+                case 'POS_END':
                     $positionPhp = View::POS_END;
                     break;
                 case 'ready':
+                case 'POS_READY':
                     $positionPhp = View::POS_READY;
                     break;
                 case 'load':
+                case 'POS_LOAD':
                     $positionPhp = View::POS_LOAD;
                     break;
                 default:
-                    throw new NotSupportedException($position.' is not a valid position');
+                    throw new NotSupportedException($position . ' is not a valid position');
             }
         }
 

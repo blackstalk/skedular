@@ -37,16 +37,24 @@ Craft.ElevatedSessionForm = Garnish.Base.extend(
             // Ignore if we're in the middle of getting the elevated session timeout
             if (Craft.elevatedSessionManager.fetchingTimeout) {
                 ev.preventDefault();
+                ev.stopImmediatePropagation();
                 return;
             }
 
             // Are we only interested in certain inputs?
             if (this.inputs) {
                 var inputsChanged = false;
+                var $input;
 
                 for (var i = 0; i < this.inputs.length; i++) {
+                    $input = this.inputs[i].input;
+                    // Is this a password input?
+                    if ($input.data('passwordInput')) {
+                        $input = $input.data('passwordInput').$currentInput;
+                    }
+
                     // Has this input's value changed?
-                    if (Garnish.getInputPostVal(this.inputs[i].input) !== this.inputs[i].val) {
+                    if (Garnish.getInputPostVal($input) !== this.inputs[i].val) {
                         inputsChanged = true;
                         break;
                     }
@@ -60,6 +68,7 @@ Craft.ElevatedSessionForm = Garnish.Base.extend(
 
             // Prevent the form from submitting until the user has an elevated session
             ev.preventDefault();
+            ev.stopImmediatePropagation();
             Craft.elevatedSessionManager.requireElevatedSession($.proxy(this, 'submitForm'));
         },
 

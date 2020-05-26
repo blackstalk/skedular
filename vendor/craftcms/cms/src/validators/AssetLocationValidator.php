@@ -19,13 +19,10 @@ use yii\validators\Validator;
  * Class AssetLocationValidator.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class AssetLocationValidator extends Validator
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var string The folder ID attribute on the model
      */
@@ -71,9 +68,6 @@ class AssetLocationValidator extends Validator
      */
     public $avoidFilenameConflicts;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -115,7 +109,7 @@ class AssetLocationValidator extends Validator
 
         // Get the folder
         if (Craft::$app->getAssets()->getFolderById($folderId) === null) {
-            throw new InvalidConfigException('Invalid folder ID: '.$folderId);
+            throw new InvalidConfigException('Invalid folder ID: ' . $folderId);
         }
 
         // Make sure the new filename has a valid extension

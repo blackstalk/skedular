@@ -3,6 +3,7 @@
 
 {% set fullPageForm = true %}
 {% set saveShortcutRedirect = continueEditingUrl %}
+{% do view.setIsDeltaRegistrationActive(true) %}
 
 {% set groupHandle = group.handle %}
 {% set isNewCategory = category.id ? false : true %}
@@ -10,19 +11,23 @@
 {% hook "cp.categories.edit" %}
 
 {% block header %}
-    {{ block('pageTitle') }}
-    {{ block('contextMenu') }}
-    <div class="flex-grow"></div>
-    {% if showPreviewBtn or shareUrl is defined %}
-        {% if showPreviewBtn %}
-            <div class="btn livepreviewbtn">{{ "Live Preview"|t('app') }}</div>
+    <div class="flex flex-nowrap">
+        {{ block('pageTitle') }}
+        {{ block('contextMenu') }}
+    </div>
+    <div class="flex">
+        {% if showPreviewBtn or shareUrl is defined %}
+            <div class="btngroup">
+                {% if showPreviewBtn %}
+                    <div class="btn livepreviewbtn" data-icon="view">{{ "Preview"|t('app') }}</div>
+                {% endif %}
+                {% if shareUrl is defined %}
+                    <a href="{{ shareUrl }}" class="btn sharebtn" data-icon="share" rel="noopener" target="_blank">{{ 'Share'|t('app') }}</a>
+                {% endif %}
+            </div>
         {% endif %}
-        {% if shareUrl is defined %}
-            <a href="{{ shareUrl }}" class="btn sharebtn" target="_blank">{{ 'Share'|t('app') }}</a>
-        {% endif %}
-        <div class="flex-grow"></div>
-    {% endif %}
-    {{ block('actionButton') }}
+        {{ block('actionButton') }}
+    </div>
 {% endblock %}
 
 {% block contextMenu %}
@@ -48,7 +53,7 @@
                         {{ forms.optionShortcutLabel('S') }}
                         {{ "Save and continue editing"|t('app') }}
                     </a></li>
-                <li><a class="formsubmit" data-redirect="{{ ('categories/'~groupHandle~'/new?parentId={parent.id}#')|hash }}">{{ "Save and add another"|t('app') }}</a></li>
+                <li><a class="formsubmit" data-redirect="{{ (nextCategoryUrl~'?parentId={parent.id}#')|hash }}">{{ "Save and add another"|t('app') }}</a></li>
 
                 {% if not isNewCategory %}
                     <li><a class="formsubmit" data-param="duplicate" data-value="1" data-redirect="{{ (continueEditingUrl~'#')|hash }}">{{ "Save as a new category"|t('app') }}</a></li>
@@ -66,12 +71,12 @@
 
 
 {% block content %}
-    <input type="hidden" name="action" value="categories/save-category">
+    {{ actionInput('categories/save-category') }}
     {{ redirectInput('categories/'~groupHandle) }}
 
-    <input type="hidden" name="groupId" value="{{ group.id }}">
-    {% if category.id %}<input type="hidden" name="categoryId" value="{{ category.id }}">{% endif %}
-    {% if craft.app.getIsMultiSite() %}<input type="hidden" name="siteId" value="{{ category.siteId }}">{% endif %}
+    {{ hiddenInput('groupId', group.id) }}
+    {% if category.id %}{{ hiddenInput('categoryId', category.id) }}{% endif %}
+    {% if craft.app.getIsMultiSite() %}{{ hiddenInput('siteId', category.siteId) }}{% endif %}
 
     <div id="fields">
         {{ forms.textField({
@@ -92,7 +97,8 @@
                 <div id="{{ tab.getHtmlId() }}"{% if not loop.first %} class="hidden"{% endif %}>
                     {% include "_includes/fields" with {
                         fields:  tab.getFields(),
-                        element: category
+                        element: category,
+                        registerDeltas: true,
                     } only %}
                 </div>
             {% endfor %}
@@ -111,6 +117,8 @@
             siteId: category.siteId,
             id: 'slug',
             name: 'slug',
+            autocorrect: false,
+            autocapitalize: false,
             value: category.slug,
             placeholder: "Enter slug"|t('app'),
             errors: (category.getErrors('slug')|merge(category.getErrors('uri')))
@@ -123,7 +131,7 @@
                 name: 'parentId',
                 elementType: elementType,
                 selectionLabel: "Choose"|t('app'),
-                sources: ['group:'~group.id],
+                sources: ['group:'~group.uid],
                 criteria: parentOptionCriteria,
                 limit: 1,
                 elements: (parent is defined and parent ? [parent]),
@@ -141,7 +149,6 @@
     </div>
 
     {% if category.id %}
-        <hr>
         <div class="meta read-only">
             <div class="data">
                 <h5 class="heading">{{ "Date Created"|t('app') }}</h5>
@@ -161,6 +168,8 @@
 
 {% if not category.slug %}
     {% js %}
-        window.slugGenerator = new Craft.SlugGenerator('#title', '#slug');
+        window.slugGenerator = new Craft.SlugGenerator('#title', '#slug', {
+            charMap: {{ craft.cp.getAsciiCharMap(category.site.language)|json_encode|raw }}
+        });
     {% endjs %}
 {% endif %}

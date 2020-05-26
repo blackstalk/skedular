@@ -21,11 +21,14 @@
   "minimum-stability": "RC",
   "require": {
     "php": ">=7.0.0",
-    "craftcms/cms": "^3.0.0-RC14",
+    "craftcms/cms": "3.4.19.1",
     "vlucas/phpdotenv": "^2.4.0",
     "roave/security-advisories": "dev-master",
-    "craftcms/element-api": "^2.5.2",
-    "craftcms/redactor": "1.0.1"
+    "craftcms/element-api": "2.6.0",
+    "craftcms/redactor": "2.6.1",
+    "chasegiunta/scss": "^1.0",
+    "mmikkel/cp-field-inspect": "^1.1",
+    "nystudio107/craft-cookies": "^1.1"
   },
   "config": {
     "optimize-autoloader": true

@@ -10,11 +10,11 @@ namespace yii\queue\cli;
 use yii\base\Behavior;
 use yii\console\Controller;
 use yii\helpers\Console;
-use yii\queue\ErrorEvent;
 use yii\queue\ExecEvent;
+use yii\queue\JobInterface;
 
 /**
- * Verbose Behavior
+ * Verbose Behavior.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */
@@ -81,19 +81,22 @@ class VerboseBehavior extends Behavior
     }
 
     /**
-     * @param ErrorEvent $event
+     * @param ExecEvent $event
      */
-    public function afterError(ErrorEvent $event)
+    public function afterError(ExecEvent $event)
     {
         $this->command->stdout(date('Y-m-d H:i:s'), Console::FG_YELLOW);
         $this->command->stdout($this->jobTitle($event), Console::FG_GREY);
         $this->command->stdout(' - ', Console::FG_YELLOW);
         $this->command->stdout('Error', Console::BG_RED);
-        $duration = number_format(round(microtime(true) - $this->jobStartedAt, 3), 3);
-        $this->command->stdout(" ($duration s)", Console::FG_YELLOW);
+        if ($this->jobStartedAt) {
+            $duration = number_format(round(microtime(true) - $this->jobStartedAt, 3), 3);
+            $this->command->stdout(" ($duration s)", Console::FG_YELLOW);
+        }
         $this->command->stdout(PHP_EOL);
         $this->command->stdout('> ' . get_class($event->error) . ': ', Console::FG_RED);
-        $this->command->stdout($event->error->getMessage(), Console::FG_GREY);
+        $message = explode("\n", ltrim($event->error->getMessage()), 2)[0]; // First line
+        $this->command->stdout($message, Console::FG_GREY);
         $this->command->stdout(PHP_EOL);
     }
 
@@ -104,12 +107,12 @@ class VerboseBehavior extends Behavior
      */
     protected function jobTitle(ExecEvent $event)
     {
-        $class = get_class($event->job);
+        $name = $event->job instanceof JobInterface ? get_class($event->job) : 'unknown job';
         $extra = "attempt: $event->attempt";
         if ($pid = $event->sender->getWorkerPid()) {
             $extra .= ", pid: $pid";
         }
-        return " [$event->id] $class ($extra)";
+        return " [$event->id] $name ($extra)";
     }
 
     /**

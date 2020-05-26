@@ -13,7 +13,9 @@ use craft\errors\SiteNotFoundException;
 use craft\helpers\ArrayHelper;
 use craft\helpers\StringHelper;
 use craft\models\Site;
+use craft\services\Sites;
 use yii\base\InvalidConfigException;
+use yii\db\Exception as DbException;
 use yii\web\BadRequestHttpException;
 use yii\web\NotFoundHttpException;
 
@@ -21,29 +23,30 @@ use yii\web\NotFoundHttpException;
 
 /**
  * @inheritdoc
- * @property string $fullPath The full requested path, including the CP trigger and pagination info.
- * @property string $path The requested path, sans CP trigger and pagination info.
+ * @property string $fullPath The full requested path, including the control panel trigger and pagination info.
+ * @property string $path The requested path, sans control panel trigger and pagination info.
  * @property array $segments The segments of the requested path.
  * @property int $pageNum The requested page number.
  * @property string $token The token submitted with the request, if there is one.
- * @property bool $isCpRequest Whether the Control Panel was requested.
+ * @property bool $isCpRequest Whether the control panel was requested.
  * @property bool $isSiteRequest Whether the front end site was requested.
  * @property bool $isActionRequest Whether a specific controller action was requested.
  * @property array $actionSegments The segments of the requested controller action path, if this is an [[getIsActionRequest()|action request]].
  * @property bool $isLivePreview Whether this is a Live Preview request.
  * @property string $queryStringWithoutPath The request’s query string, without the path parameter.
+ * @property-read bool $isPreview Whether this is an element preview request.
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Request extends \yii\web\Request
 {
-    // Traits
-    // =========================================================================
-
     use RequestTrait;
 
-    // Properties
-    // =========================================================================
+    const CP_PATH_LOGIN = 'login';
+    const CP_PATH_LOGOUT = 'logout';
+    const CP_PATH_SET_PASSWORD = 'set-password';
+    const CP_PATH_VERIFY_EMAIL = 'verify-email';
+    const CP_PATH_UPDATE = 'update';
 
     /**
      * @inheritdoc
@@ -56,6 +59,12 @@ class Request extends \yii\web\Request
         'Forwarded-For',
         'Forwarded',
     ];
+
+    /**
+     * @var int The highest page number that Craft should accept.
+     * @since 3.1.14
+     */
+    public $maxPageNum = 100000;
 
     /**
      * @var
@@ -95,12 +104,22 @@ class Request extends \yii\web\Request
     /**
      * @var bool
      */
+    private $_isLoginRequest = false;
+
+    /**
+     * @var bool
+     */
     private $_checkedRequestType = false;
 
     /**
      * @var string[]|null
      */
     private $_actionSegments;
+
+    /**
+     * @var bool
+     */
+    private $_isLivePreview = false;
 
     /**
      * @var bool|null
@@ -132,8 +151,11 @@ class Request extends \yii\web\Request
      */
     private $_encodedBodyParams = false;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|false
+     * @see getToken()
+     */
+    public $_token;
 
     /**
      * @inheritdoc
@@ -144,8 +166,14 @@ class Request extends \yii\web\Request
 
         // Set the @webroot and @web aliases now (instead of from yii\web\Application::bootstrap())
         // in case a site's base URL requires @web, and so we can include the host info in @web
-        Craft::setAlias('@webroot', dirname($this->getScriptFile()));
-        Craft::setAlias('@web', $this->getHostInfo().$this->getBaseUrl());
+        if (Craft::getRootAlias('@webroot') === false) {
+            Craft::setAlias('@webroot', dirname($this->getScriptFile()));
+            $this->isWebrootAliasSetDynamically = true;
+        }
+        if (Craft::getRootAlias('@web') === false) {
+            Craft::setAlias('@web', $this->getHostInfo() . $this->getBaseUrl());
+            $this->isWebAliasSetDynamically = true;
+        }
 
         $generalConfig = Craft::$app->getConfig()->getGeneral();
 
@@ -154,15 +182,20 @@ class Request extends \yii\web\Request
 
         try {
             // Figure out which site is being requested
-            $site = $this->_getCurrentSite();
+            $sitesService = Craft::$app->getSites();
+            if ($sitesService->getHasCurrentSite()) {
+                $site = $sitesService->getCurrentSite();
+            } else {
+                $site = $this->_requestedSite($sitesService);
+            }
 
             // If the requested URI begins with the current site's base URL path,
             // make sure that our internal path doesn't include those segments
-            if ($site->baseUrl && ($siteBasePath = parse_url(Craft::getAlias($site->baseUrl), PHP_URL_PATH)) !== null) {
+            if ($site->baseUrl && ($siteBasePath = parse_url($site->getBaseUrl(), PHP_URL_PATH)) !== null) {
                 $siteBasePath = $this->_normalizePath($siteBasePath);
                 $baseUrl = $this->_normalizePath($this->getBaseUrl());
-                $fullUri = $baseUrl.($baseUrl && $path ? '/' : '').$path;
-                if (strpos($fullUri.'/', $siteBasePath.'/') === 0) {
+                $fullUri = $baseUrl . ($baseUrl && $path ? '/' : '') . $path;
+                if (strpos($fullUri . '/', $siteBasePath . '/') === 0) {
                     $path = $this->_fullPath = ltrim(substr($fullUri, strlen($siteBasePath)), '/');
                 }
             }
@@ -175,7 +208,7 @@ class Request extends \yii\web\Request
         }
 
         // Get the path segments
-        $this->_segments = explode('/', $path);
+        $this->_segments = $this->_segments($path);
 
         // Is this a CP request?
         $this->_isCpRequest = ($this->getSegment(1) == $generalConfig->cpTrigger);
@@ -183,31 +216,33 @@ class Request extends \yii\web\Request
         if ($this->_isCpRequest) {
             // Chop the CP trigger segment off of the path & segments array
             array_shift($this->_segments);
+
+            // Force 'p' pageTrigger
+            // (all that really matters is that it doesn't have a trailing slash, but whatever.)
+            $generalConfig->pageTrigger = 'p';
+        }
+
+        if (isset($sitesService)) {
+            // Set the active site to either the requested site or the primary site, depending on the request type
+            if ($this->_isCpRequest) {
+                // The current site could have been set by the bootstrop script if the CRAFT_SITE constant is defined
+                $sitesService->setCurrentSite(null);
+            } else if (isset($site)) {
+                $sitesService->setCurrentSite($site);
+            }
         }
 
         // Is this a paginated request?
-        $pageTrigger = Craft::$app->getConfig()->getGeneral()->pageTrigger;
-
-        if (!is_string($pageTrigger) || $pageTrigger === '') {
-            $pageTrigger = 'p';
-        }
+        $pageTrigger = $generalConfig->getPageTrigger();
 
         // Is this query string-based pagination?
-        if ($pageTrigger[0] === '?') {
-            $pageTrigger = trim($pageTrigger, '?=');
-
-            // Avoid conflict with the path param
-            $pathParam = Craft::$app->getConfig()->getGeneral()->pathParam;
-            if ($pageTrigger === $pathParam) {
-                $pageTrigger = $pathParam === 'p' ? 'pg' : 'p';
-            }
-
-            $this->_pageNum = (int)$this->getQueryParam($pageTrigger, '1');
+        if (strpos($pageTrigger, '?') === 0) {
+            $this->_pageNum = (int)$this->getQueryParam(trim($pageTrigger, '?='), '1');
         } else if (!empty($this->_segments)) {
             // Match against the entire path string as opposed to just the last segment so that we can support
             // "/page/2"-style pagination URLs
             $path = implode('/', $this->_segments);
-            $pageTrigger = preg_quote($generalConfig->pageTrigger, '/');
+            $pageTrigger = preg_quote($pageTrigger, '/');
 
             if (preg_match("/^(?:(.*)\/)?{$pageTrigger}(\d+)$/", $path, $match)) {
                 // Capture the page num
@@ -217,9 +252,11 @@ class Request extends \yii\web\Request
                 $newPath = $match[1];
 
                 // Reset the segments without the pagination stuff
-                $this->_segments = array_values(array_filter(explode('/', $newPath)));
+                $this->_segments = $this->_segments($newPath);
             }
         }
+
+        $this->_pageNum = min($this->_pageNum, $this->maxPageNum);
 
         // Now that we've chopped off the admin/page segments, set the path
         $this->_path = implode('/', $this->_segments);
@@ -227,6 +264,7 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the full request path, whether that came from the path info or the path query parameter.
+     *
      * Leading and trailing slashes will be removed.
      *
      * @return string
@@ -259,12 +297,11 @@ class Request extends \yii\web\Request
     }
 
     /**
-     * Returns the requested path, sans CP trigger and pagination info.
-     * If $returnRealPathInfo is returned, then [[parent::getPathInfo()]] will be returned.
+     * Returns the requested path, sans control panel trigger and pagination info.
+     *
+     * If $returnRealPathInfo is returned, then [[\yii\web\Request::getPathInfo()]] will be returned.
      *
      * @param bool $returnRealPathInfo Whether the real path info should be returned instead.
-     * @see \yii\web\UrlManager::processRequest()
-     * @see \yii\web\UrlRule::processRequest()
      * @return string The requested path, or the path info.
      * @throws InvalidConfigException if the path info cannot be determined due to unexpected server configuration
      */
@@ -279,9 +316,21 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the segments of the requested path.
-     * Note that the segments will not include the [CP trigger](http://craftcms.com/docs/config-settings#cpTrigger)
-     * if it’s a CP request, or the [page trigger](http://craftcms.com/docs/config-settings#pageTrigger) or page
-     * number if it’s a paginated request.
+     *
+     * ::: tip
+     * Note that the segments will not include the [control panel trigger](config:cpTrigger)
+     * if it’s a control panel request, or the [page trigger](config:pageTrigger)
+     * or page number if it’s a paginated request.
+     * :::
+     *
+     * ---
+     *
+     * ```php
+     * $segments = Craft::$app->request->segments;
+     * ```
+     * ```twig
+     * {% set segments = craft.app.request.segments %}
+     * ```
      *
      * @return array The Craft path’s segments.
      */
@@ -292,6 +341,15 @@ class Request extends \yii\web\Request
 
     /**
      * Returns a specific segment from the Craft path.
+     *
+     * ---
+     *
+     * ```php
+     * $firstSegment = Craft::$app->request->getSegment(1);
+     * ```
+     * ```twig
+     * {% set firstSegment = craft.app.request.getSegment(1) %}
+     * ```
      *
      * @param int $num Which segment to return (1-indexed).
      * @return string|null The matching segment, or `null` if there wasn’t one.
@@ -316,6 +374,15 @@ class Request extends \yii\web\Request
     /**
      * Returns the requested page number.
      *
+     * ---
+     *
+     * ```php
+     * $page = Craft::$app->request->pageNum;
+     * ```
+     * ```twig
+     * {% set page = craft.app.request.pageNum %}
+     * ```
+     *
      * @return int The requested page number.
      */
     public function getPageNum(): int
@@ -326,20 +393,37 @@ class Request extends \yii\web\Request
     /**
      * Returns the token submitted with the request, if there is one.
      *
+     * Tokens must be sent either as a query string param named after the <config:tokenParam> config setting (`token` by
+     * default), or an `X-Craft-Token` HTTP header on the request.
+     *
      * @return string|null The token, or `null` if there isn’t one.
+     * @throws BadRequestHttpException if an invalid token is supplied
+     * @see \craft\services\Tokens::createToken()
+     * @see Controller::requireToken()
      */
     public function getToken()
     {
-        return $this->getQueryParam(Craft::$app->getConfig()->getGeneral()->tokenParam);
+        if ($this->_token === null) {
+            $param = Craft::$app->getConfig()->getGeneral()->tokenParam;
+            $this->_token = $this->getQueryParam($param)
+                ?? $this->getHeaders()->get('X-Craft-Token')
+                ?? false;
+            if ($this->_token && !preg_match('/^[A-Za-z0-9_-]+$/', $this->_token)) {
+                $this->_token = false;
+                throw new BadRequestHttpException('Invalid token');
+            }
+        }
+
+        return $this->_token ?: null;
     }
 
     /**
-     * Returns whether the Control Panel was requested.
-     * The result depends on whether the first segment in the URI matches the
-     * [CP trigger](http://craftcms.com/docs/config-settings#cpTrigger).
-     * Note that even if this function returns `true`, the request will not necessarily route to the Control Panel.
+     * Returns whether the control panel was requested.
      *
-     * @return bool Whether the current request should be routed to the Control Panel.
+     * The result depends on whether the first segment in the URI matches the
+     * [control panel trigger](config:cpTrigger).
+     *
+     * @return bool Whether the current request should be routed to the control panel.
      */
     public function getIsCpRequest(): bool
     {
@@ -348,6 +432,7 @@ class Request extends \yii\web\Request
 
     /**
      * Returns whether the front end site was requested.
+     *
      * The result will always just be the opposite of whatever [[getIsCpRequest()]] returns.
      *
      * @return bool Whether the current request should be routed to the front-end site.
@@ -359,10 +444,11 @@ class Request extends \yii\web\Request
 
     /**
      * Returns whether a specific controller action was requested.
+     *
      * There are several ways that this method could return `true`:
-     * - If the first segment in the Craft path matches the
-     *   [action trigger](http://craftcms.com/docs/config-settings#actionTrigger)
-     * - If there is an 'action' param in either the POST data or query string
+     *
+     * - If the first segment in the Craft path matches the [action trigger](config:actionTrigger)
+     * - If there is an `action` param in either the POST data or query string
      * - If the Craft path matches the Login path, the Logout path, or the Set Password path
      *
      * @return bool Whether the current request should be routed to a controller action.
@@ -374,9 +460,24 @@ class Request extends \yii\web\Request
     }
 
     /**
-     * Returns whether the current request is solely an action request.
+     * Returns whether this was a Login request.
+     *
+     * @return bool
+     * @since 3.2.0
      */
-    public function getIsSingleActionRequest()
+    public function getIsLoginRequest(): bool
+    {
+        $this->_checkRequestType();
+        return $this->_isLoginRequest;
+    }
+
+    /**
+     * Returns whether the current request is solely an action request.
+     *
+     * @return bool
+     * @deprecated in 3.2.0
+     */
+    public function getIsSingleActionRequest(): bool
     {
         $this->_checkRequestType();
         return $this->_isSingleActionRequest;
@@ -395,22 +496,75 @@ class Request extends \yii\web\Request
     }
 
     /**
+     * Returns whether this is an element preview request.
+     *
+     * ::: tip
+     * This will only return `true` when previewing entries at the moment. For all other element types, check
+     * [[getIsLivePreview()]].
+     * :::
+     *
+     * ---
+     * ```php
+     * $isPreviewRequest = Craft::$app->request->isPreview;
+     * ```
+     * ```twig
+     * {% set isPreviewRequest = craft.app.request.isPreview %}
+     * ```
+     *
+     * @return bool
+     * @since 3.2.1
+     */
+    public function getIsPreview(): bool
+    {
+        return $this->getQueryParam('x-craft-preview') !== null || $this->getQueryParam('x-craft-live-preview') !== null;
+    }
+
+    /**
      * Returns whether this is a Live Preview request.
+     *
+     * ::: tip
+     * As of Craft 3.2, entries use a new previewing system, so this won’t return `true` for them. Check
+     * [[getIsPreview()]] instead for entries.
+     * :::
+     *
+     * ---
+     * ```php
+     * $isLivePreview = Craft::$app->request->isLivePreview;
+     * ```
+     * ```twig
+     * {% set isLivePreview = craft.app.request.isLivePreview %}
+     * ```
      *
      * @return bool Whether this is a Live Preview request.
      */
     public function getIsLivePreview(): bool
     {
-        return (
-            $this->getIsSiteRequest() &&
-            $this->getIsActionRequest() &&
-            $this->getBodyParam('livePreview')
-        );
+        return $this->_isLivePreview;
+    }
+
+    /**
+     * Sets whether this is a Live Preview request.
+     *
+     * @param bool $isLivePreview
+     */
+    public function setIsLivePreview(bool $isLivePreview)
+    {
+        $this->_isLivePreview = $isLivePreview;
     }
 
     /**
      * Returns whether the request is coming from a mobile browser.
+     *
      * The detection script is provided by http://detectmobilebrowsers.com. It was last updated on 2014-11-24.
+     *
+     * ---
+     *
+     * ```php
+     * $isMobileBrowser = Craft::$app->request->isMobileBrowser();
+     * ```
+     * ```twig
+     * {% set isMobileBrowser = craft.app.request.isMobileBrowser() %}
+     * ```
      *
      * @param bool $detectTablets Whether tablets should be considered “mobile”.
      * @return bool Whether the request is coming from a mobile browser.
@@ -428,7 +582,7 @@ class Request extends \yii\web\Request
                 $property = (
                     preg_match(
                         '/(android|bb\\d+|meego).+mobile|avantgo|bada\\/|blackberry|blazer|compal|elaine|fennec|hiptop|iemobile|ip(hone|od)|iris|kindle|lge |maemo|midp|mmp|mobile.+firefox|netfront|opera m(ob|in)i|palm( os)?|phone|p(ixi|re)\\/|plucker|pocket|psp|series(4|6)0|symbian|treo|up\\.(browser|link)|vodafone|wap|windows ce|xda|xiino'
-                        .($detectTablets ? '|android|ipad|playbook|silk' : '').'/i',
+                        . ($detectTablets ? '|android|ipad|playbook|silk' : '') . '/i',
                         $this->getUserAgent()
                     ) ||
                     preg_match(
@@ -459,13 +613,24 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the named request body parameter value.
-     * If the parameter does not exist, the second parameter passed to this method will be returned.
+     *
+     * If the parameter does not exist, the second argument passed to this method will be returned.
+     *
+     * ---
+     *
      * ```php
-     * $foo = Craft::$app->request->getBodyParam('foo'); // Returns $_POST['foo'], if it exists
+     * // get $_POST['foo'], if it exists
+     * $foo = Craft::$app->request->getBodyParam('foo');
+     *
+     * // get $_POST['foo']['bar'], if it exists
+     * $bar = Craft::$app->request->getBodyParam('foo.bar');
      * ```
-     * You can also specify a nested parameter using a dot-delimited string.
-     * ```php
-     * $bar = Craft::$app->request->getBodyParam('foo.bar'); // Returns $_POST['foo']['bar'], if it exists
+     * ```twig
+     * {# get $_POST['foo'], if it exists #}
+     * {% set foo = craft.app.request.getBodyParam('foo') %}
+     *
+     * {# get $_POST['foo']['bar'], if it exists #}
+     * {% set bar = craft.app.request.getBodyParam('foo.bar') %}
      * ```
      *
      * @param string $name The parameter name.
@@ -481,6 +646,23 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the named request body parameter value, or bails on the request with a 400 error if that parameter doesn’t exist.
+     *
+     * ---
+     *
+     * ```php
+     * // get required $_POST['foo']
+     * $foo = Craft::$app->request->getRequiredBodyParam('foo');
+     *
+     * // get required $_POST['foo']['bar']
+     * $bar = Craft::$app->request->getRequiredBodyParam('foo.bar');
+     * ```
+     * ```twig
+     * {# get required $_POST['foo'] #}
+     * {% set foo = craft.app.request.getRequiredBodyParam('foo') %}
+     *
+     * {# get required $_POST['foo']['bar'] #}
+     * {% set bar = craft.app.request.getRequiredBodyParam('foo.bar') %}
+     * ```
      *
      * @param string $name The parameter name.
      * @return mixed The parameter value
@@ -500,6 +682,23 @@ class Request extends \yii\web\Request
 
     /**
      * Validates and returns the named request body parameter value, or bails on the request with a 400 error if that parameter doesn’t pass validation.
+     *
+     * ---
+     *
+     * ```php
+     * // get validated $_POST['foo']
+     * $foo = Craft::$app->request->getValidatedBodyParam('foo');
+     *
+     * // get validated $_POST['foo']['bar']
+     * $bar = Craft::$app->request->getValidatedBodyParam('foo.bar');
+     * ```
+     * ```twig
+     * {# get validated $_POST['foo'] #}
+     * {% set foo = craft.app.request.getValidatedBodyParam('foo') %}
+     *
+     * {# get validated $_POST['foo']['bar'] #}
+     * {% set bar = craft.app.request.getValidatedBodyParam('foo.bar') %}
+     * ```
      *
      * @param string $name The parameter name.
      * @return mixed|null The parameter value
@@ -538,13 +737,24 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the named GET parameter value.
-     * If the GET parameter does not exist, the second parameter to this method will be returned.
+     *
+     * If the GET parameter does not exist, the second argument passed to this method will be returned.
+     *
+     * ---
+     *
      * ```php
-     * $foo = Craft::$app->request->getQueryParam('foo'); // Returns $_GET['foo'], if it exists
+     * // get $_GET['foo'], if it exists
+     * $foo = Craft::$app->request->getQueryParam('foo');
+     *
+     * // get $_GET['foo']['bar'], if it exists
+     * $bar = Craft::$app->request->getQueryParam('foo.bar');
      * ```
-     * You can also specify a nested parameter using a dot-delimited string.
-     * ```php
-     * $bar = Craft::$app->request->getQueryParam('foo.bar'); // Returns $_GET['foo']['bar'], if it exists
+     * ```twig
+     * {# get $_GET['foo'], if it exists #}
+     * {% set foo = craft.app.request.getQueryParam('foo') %}
+     *
+     * {# get $_GET['foo']['bar'], if it exists #}
+     * {% set bar = craft.app.request.getQueryParam('foo.bar') %}
      * ```
      *
      * @param string $name The GET parameter name.
@@ -559,6 +769,23 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the named GET parameter value, or bails on the request with a 400 error if that parameter doesn’t exist.
+     *
+     * ---
+     *
+     * ```php
+     * // get required $_GET['foo']
+     * $foo = Craft::$app->request->getRequiredQueryParam('foo');
+     *
+     * // get required $_GET['foo']['bar']
+     * $bar = Craft::$app->request->getRequiredQueryParam('foo.bar');
+     * ```
+     * ```twig
+     * {# get required$_GET['foo'] #}
+     * {% set foo = craft.app.request.getRequiredQueryParam('foo') %}
+     *
+     * {# get required $_GET['foo']['bar'] #}
+     * {% set bar = craft.app.request.getRequiredQueryParam('foo.bar') %}
+     * ```
      *
      * @param string $name The GET parameter name.
      * @return mixed The GET parameter value.
@@ -578,6 +805,7 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the named parameter value from either GET or the request body.
+     *
      * If the parameter does not exist, the second parameter to this method will be returned.
      *
      * @param string $name The parameter name.
@@ -623,6 +851,15 @@ class Request extends \yii\web\Request
     /**
      * Returns the request’s query string, without the path parameter.
      *
+     * ---
+     *
+     * ```php
+     * $queryString = Craft::$app->request->queryStringWithoutPath;
+     * ```
+     * ```twig
+     * {% set queryString = craft.app.request.queryStringWithoutPath %}
+     * ```
+     *
      * @return string The query string.
      */
     public function getQueryStringWithoutPath(): string
@@ -633,7 +870,7 @@ class Request extends \yii\web\Request
         $pathParam = Craft::$app->getConfig()->getGeneral()->pathParam;
 
         foreach ($parts as $key => $part) {
-            if (strpos($part, $pathParam.'=') === 0) {
+            if (strpos($part, $pathParam . '=') === 0) {
                 unset($parts[$key]);
                 break;
             }
@@ -685,6 +922,15 @@ class Request extends \yii\web\Request
      * Returns whether the client is running "Windows", "Mac", "Linux" or "Other", based on the
      * browser's UserAgent string.
      *
+     * ---
+     *
+     * ```php
+     * $clientOs = Craft::$app->request->clientOs;
+     * ```
+     * ```twig
+     * {% set clientOs = craft.app.request.clientOs %}
+     * ```
+     *
      * @return string The OS the client is running.
      */
     public function getClientOs(): string
@@ -708,6 +954,7 @@ class Request extends \yii\web\Request
 
     /**
      * Returns the token used to perform CSRF validation.
+     *
      * This token is a masked version of [[rawCsrfToken]] to prevent [BREACH attacks](http://breachattack.com/).
      * This token may be passed along via a hidden field of an HTML form or an HTTP header value
      * to support CSRF validation.
@@ -761,6 +1008,22 @@ class Request extends \yii\web\Request
     }
 
     /**
+     * Returns the normalized content type.
+     *
+     * @return string|null
+     * @since 3.3.8
+     */
+    public function getNormalizedContentType()
+    {
+        $rawContentType = $this->getContentType();
+        if (($pos = strpos($rawContentType, ';')) !== false) {
+            // e.g. text/html; charset=UTF-8
+            return substr($rawContentType, 0, $pos);
+        }
+        return $rawContentType;
+    }
+
+    /**
      * @inheritdoc
      * @internal Based on \yii\web\Request::resolve(), but we don't modify $_GET/$this->_queryParams in the process.
      */
@@ -775,9 +1038,6 @@ class Request extends \yii\web\Request
         /** @noinspection AdditionOperationOnArraysInspection */
         return [$route, $params + $this->getQueryParams()];
     }
-
-    // Protected Methods
-    // =========================================================================
 
     /**
      * Generates an unmasked random token used to perform CSRF validation.
@@ -812,7 +1072,7 @@ class Request extends \yii\web\Request
             $passwordHash = $currentUser->password;
             $userId = $currentUser->id;
             $hashable = implode('|', [$nonce, $userId, $passwordHash]);
-            $token = $nonce.'|'.Craft::$app->getSecurity()->hashData($hashable, $this->cookieValidationKey);
+            $token = $nonce . '|' . Craft::$app->getSecurity()->hashData($hashable, $this->cookieValidationKey);
         } else {
             // Unauthenticated users.
             $token = $nonce;
@@ -836,36 +1096,47 @@ class Request extends \yii\web\Request
      */
     protected function csrfTokenValidForCurrentUser(string $token): bool
     {
-        $currentUser = false;
-
-        if (Craft::$app->getIsInstalled() && Craft::$app->get('user', false)) {
-            $currentUser = Craft::$app->getUser()->getIdentity();
+        if (!Craft::$app->getIsInstalled()) {
+            return true;
         }
 
-        if ($currentUser) {
-            $splitToken = explode('|', $token, 2);
-
-            if (count($splitToken) !== 2) {
-                return false;
+        try {
+            if (($currentUser = Craft::$app->getUser()->getIdentity()) === null) {
+                return true;
             }
-
-            list($nonce,) = $splitToken;
-
-            // Check that this token is for the current user
-            $passwordHash = $currentUser->password;
-            $userId = $currentUser->id;
-            $hashable = implode('|', [$nonce, $userId, $passwordHash]);
-            $expectedToken = $nonce.'|'.Craft::$app->getSecurity()->hashData($hashable, $this->cookieValidationKey);
-
-            return Craft::$app->getSecurity()->compareString($expectedToken, $token);
+        } catch (DbException $e) {
+            // Craft is probably not installed or updating
+            Craft::$app->getUser()->switchIdentity(null);
+            return true;
         }
 
-        // If they're logged out, any token is fine
-        return true;
+        $splitToken = explode('|', $token, 2);
+
+        if (count($splitToken) !== 2) {
+            return false;
+        }
+
+        list($nonce,) = $splitToken;
+
+        // Check that this token is for the current user
+        $passwordHash = $currentUser->password;
+        $userId = $currentUser->id;
+        $hashable = implode('|', [$nonce, $userId, $passwordHash]);
+        $expectedToken = $nonce . '|' . Craft::$app->getSecurity()->hashData($hashable, $this->cookieValidationKey);
+
+        return Craft::$app->getSecurity()->compareString($expectedToken, $token);
     }
 
-    // Private Methods
-    // =========================================================================
+    /**
+     * Returns the segments of a given path.
+     *
+     * @param string $path
+     * @return string[]
+     */
+    private function _segments(string $path): array
+    {
+        return array_values(ArrayHelper::filterEmptyStringsFromArray(explode('/', $path)));
+    }
 
     /**
      * Normalizes a URI path by trimming leading/trailing slashes and removing double slashes.
@@ -879,28 +1150,20 @@ class Request extends \yii\web\Request
     }
 
     /**
-     * Determine the current site for the request, either because it is already defined
-     * or by finding the one that most closely matches the requested URL.
+     * Returns the site that most closely matches the requested URL.
      *
+     * @param Sites $sitesService
      * @return Site
      * @throws SiteNotFoundException if no sites exist
      */
-    private function _getCurrentSite(): Site
+    private function _requestedSite(Sites $sitesService): Site
     {
-        $sitesService = Craft::$app->getSites();
-
-        // If a current site is already defined, go with that
-        if ($sitesService->getHasCurrentSite()) {
-            /** @noinspection PhpUnhandledExceptionInspection */
-            return $sitesService->getCurrentSite();
-        }
-
         $sites = $sitesService->getAllSites();
 
         $hostName = $this->getHostName();
         $baseUrl = $this->_normalizePath($this->getBaseUrl());
         $path = $this->getFullPath();
-        $fullUri = $baseUrl.($baseUrl && $path ? '/' : '').$path;
+        $fullUri = $baseUrl . ($baseUrl && $path ? '/' : '') . $path;
         $secure = $this->getIsSecureConnection();
         $scheme = $secure ? 'https' : 'http';
         $port = $secure ? $this->getSecurePort() : $this->getPort();
@@ -911,36 +1174,46 @@ class Request extends \yii\web\Request
                 continue;
             }
 
-            if (($parsed = parse_url(Craft::getAlias($site->baseUrl))) === false) {
-                Craft::warning('Unable to parse the site base URL: '.$site->baseUrl);
+            if (($parsed = parse_url($site->getBaseUrl())) === false) {
+                Craft::warning('Unable to parse the site base URL: ' . $site->baseUrl);
                 continue;
             }
 
             // Does the site URL specify a host name?
-            if (!empty($parsed['host']) && $hostName && $parsed['host'] !== $hostName) {
+            if (
+                !empty($parsed['host']) &&
+                $hostName &&
+                $parsed['host'] !== $hostName &&
+                (
+                    !function_exists('idn_to_ascii') ||
+                    !defined('IDNA_NONTRANSITIONAL_TO_ASCII') ||
+                    !defined('INTL_IDNA_VARIANT_UTS46') ||
+                    idn_to_ascii($parsed['host'], IDNA_NONTRANSITIONAL_TO_ASCII, INTL_IDNA_VARIANT_UTS46) !== $hostName
+                )
+            ) {
                 continue;
             }
 
             // Does the site URL specify a base path?
             $parsedPath = !empty($parsed['path']) ? $this->_normalizePath($parsed['path']) : '';
-            if ($parsedPath && strpos($fullUri.'/', $parsedPath.'/') !== 0) {
+            if ($parsedPath && strpos($fullUri . '/', $parsedPath . '/') !== 0) {
                 continue;
             }
 
             // It's a possible match!
-            $scores[$i] = 8 + strlen($parsedPath);
+            $scores[$i] = 1000 + strlen($parsedPath) * 100;
 
-            $parsedScheme = !empty($parsed['scheme']) ? strtolower($parsed['scheme']) : 'http';
+            $parsedScheme = !empty($parsed['scheme']) ? strtolower($parsed['scheme']) : $scheme;
             $parsedPort = $parsed['port'] ?? ($parsedScheme === 'https' ? 443 : 80);
 
             // Do the ports match?
             if ($parsedPort == $port) {
-                $scores[$i] += 4;
+                $scores[$i] += 100;
             }
 
             // Do the schemes match?
             if ($parsedScheme === $scheme) {
-                $scores[$i] += 2;
+                $scores[$i] += 10;
             }
 
             // One Pence point if it's the primary site in case we need a tiebreaker
@@ -957,9 +1230,7 @@ class Request extends \yii\web\Request
         // Sort by scores descending
         arsort($scores, SORT_NUMERIC);
         $first = ArrayHelper::firstKey($scores);
-        $site = $sites[$first];
-        $sitesService->setCurrentSite($site);
-        return $site;
+        return $sites[$first];
     }
 
     /**
@@ -970,8 +1241,11 @@ class Request extends \yii\web\Request
     private function _getQueryStringPath(): string
     {
         $pathParam = Craft::$app->getConfig()->getGeneral()->pathParam;
-
-        return $this->getQueryParam($pathParam, '');
+        $value = $this->getQueryParam($pathParam, '');
+        if (!is_string($value)) {
+            return '';
+        }
+        return $value;
     }
 
     /**
@@ -986,26 +1260,46 @@ class Request extends \yii\web\Request
         $configService = Craft::$app->getConfig();
         $generalConfig = $configService->getGeneral();
 
-        // If there's a token in the query string, then that should take precedence over everything else
-        if (!$this->getQueryParam($generalConfig->tokenParam)) {
+        // If there's a token on the request, then that should take precedence over everything else
+        if ($this->getToken() === null) {
             $firstSegment = $this->getSegment(1);
 
             // Is this an action request?
+            $checkSpecialPaths = false;
+            $loginPath = $logoutPath = $setPasswordPath = $verifyEmailPath = $updatePath = null;
             if ($this->_isCpRequest) {
-                $loginPath = 'login';
-                $logoutPath = 'logout';
-                $setPasswordPath = 'setpassword';
-                $updatePath = 'update';
-            } else {
-                $loginPath = trim($generalConfig->getLoginPath(), '/');
-                $logoutPath = trim($generalConfig->getLogoutPath(), '/');
+                $checkSpecialPaths = true;
+                $loginPath = self::CP_PATH_LOGIN;
+                $logoutPath = self::CP_PATH_LOGOUT;
+                $setPasswordPath = self::CP_PATH_SET_PASSWORD;
+                $verifyEmailPath = self::CP_PATH_VERIFY_EMAIL;
+                $updatePath = self::CP_PATH_UPDATE;
+            } else if (!$generalConfig->headlessMode) {
+                $checkSpecialPaths = true;
+                if (is_string($loginPath = $generalConfig->getLoginPath())) {
+                    $loginPath = trim($loginPath, '/');
+                }
+                if (is_string($logoutPath = $generalConfig->getLogoutPath())) {
+                    $logoutPath = trim($logoutPath, '/');
+                }
                 $setPasswordPath = trim($generalConfig->getSetPasswordPath(), '/');
-                $updatePath = null;
+                $verifyEmailPath = trim($generalConfig->getVerifyEmailPath(), '/');
             }
 
             $hasTriggerMatch = ($firstSegment === $generalConfig->actionTrigger && count($this->_segments) > 1);
-            $hasActionParam = ($actionParam = $this->getParam('action')) !== null;
-            $hasSpecialPath = in_array($this->_path, [$loginPath, $logoutPath, $setPasswordPath, $updatePath], true);
+            if ($this->getNormalizedContentType() !== 'application/json') {
+                $actionParam = $this->getParam('action');
+            } else {
+                $actionParam = $this->getQueryParam('action');
+            }
+            $hasActionParam = $actionParam !== null;
+            $hasSpecialPath = $checkSpecialPaths && in_array($this->_path, [
+                $loginPath,
+                $logoutPath,
+                $setPasswordPath,
+                $verifyEmailPath,
+                $updatePath,
+            ], true);
 
             if ($hasTriggerMatch || $hasActionParam || $hasSpecialPath) {
                 $this->_isActionRequest = true;
@@ -1025,12 +1319,16 @@ class Request extends \yii\web\Request
                     switch ($this->_path) {
                         case $loginPath:
                             $this->_actionSegments = ['users', 'login'];
+                            $this->_isLoginRequest = true;
                             break;
                         case $logoutPath:
                             $this->_actionSegments = ['users', 'logout'];
                             break;
                         case $setPasswordPath:
                             $this->_actionSegments = ['users', 'set-password'];
+                            break;
+                        case $verifyEmailPath:
+                            $this->_actionSegments = ['users', 'verify-email'];
                             break;
                         case $updatePath:
                             $this->_actionSegments = ['updater', 'index'];
@@ -1067,11 +1365,16 @@ class Request extends \yii\web\Request
             return $this->_utf8AllTheThings($value);
         }
 
-        return StringHelper::convertToUtf8($value);
+        if (is_string($value)) {
+            return StringHelper::convertToUtf8($value);
+        }
+
+        return $value;
     }
 
     /**
      * Returns the named parameter value.
+     *
      * The name may include dots, to specify the path to a nested param.
      *
      * @param string|null $name

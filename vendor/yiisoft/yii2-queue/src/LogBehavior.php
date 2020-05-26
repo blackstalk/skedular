@@ -11,7 +11,7 @@ use Yii;
 use yii\base\Behavior;
 
 /**
- * Class LogBehavior
+ * Log Behavior.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */
@@ -76,9 +76,9 @@ class LogBehavior extends Behavior
     }
 
     /**
-     * @param ErrorEvent $event
+     * @param ExecEvent $event
      */
-    public function afterError(ErrorEvent $event)
+    public function afterError(ExecEvent $event)
     {
         $title = $this->getExecTitle($event);
         Yii::endProfile($title, Queue::class);
@@ -123,7 +123,7 @@ class LogBehavior extends Behavior
      */
     protected function getJobTitle(JobEvent $event)
     {
-        $name = $event->job instanceof JobInterface ? get_class($event->job) : 'mixed data';
+        $name = $event->job instanceof JobInterface ? get_class($event->job) : 'unknown job';
         return "[$event->id] $name";
     }
 

@@ -1,8 +1,8 @@
 <?php
 /**
- * @link      https://craftcms.com/
+ * @link https://craftcms.com/
  * @copyright Copyright (c) Pixel & Tonic, Inc.
- * @license   MIT
+ * @license MIT
  */
 
 namespace craft\redactor;
@@ -13,6 +13,8 @@ use craft\base\ElementInterface;
 use craft\base\Volume;
 use craft\elements\Category;
 use craft\elements\Entry;
+use craft\helpers\ArrayHelper;
+use craft\helpers\Db;
 use craft\helpers\FileHelper;
 use craft\helpers\Html;
 use craft\helpers\HtmlPurifier;
@@ -21,9 +23,11 @@ use craft\helpers\StringHelper;
 use craft\models\Section;
 use craft\redactor\assets\field\FieldAsset;
 use craft\redactor\assets\redactor\RedactorAsset;
+use craft\redactor\events\ModifyPurifierConfigEvent;
 use craft\redactor\events\RegisterLinkOptionsEvent;
 use craft\redactor\events\RegisterPluginPathsEvent;
 use craft\validators\HandleValidator;
+use HTMLPurifier_Config;
 use yii\base\Event;
 use yii\base\InvalidConfigException;
 use yii\db\Schema;
@@ -32,7 +36,7 @@ use yii\db\Schema;
  * Redactor field type
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since  3.0
+ * @since 3.0
  */
 class Field extends \craft\base\Field
 {
@@ -49,6 +53,25 @@ class Field extends \craft\base\Field
      */
     const EVENT_REGISTER_LINK_OPTIONS = 'registerLinkOptions';
 
+    /**
+     * @event ModifyPurifierConfigEvent The event that is triggered when creating HTML Purifier config
+     *
+     * Plugins can get notified when HTML Purifier config is being constructed.
+     *
+     * ```php
+     * use craft\redactor\events\ModifyPurifierConfigEvent;
+     * use craft\redactor\Field;
+     * use HTMLPurifier_AttrDef_Text;
+     * use yii\base\Event;
+     *
+     * Event::on(Field::class, Field::EVENT_MODIFY_PURIFIER_CONFIG, function(ModifyPurifierConfigEvent $e) {
+     *      // Allow the use of the Redactor Variables plugin
+     *      $e->config->getHTMLDefinition(true)->addAttribute('span', 'data-redactor-type', new HTMLPurifier_AttrDef_Text());
+     * });
+     * ```
+     */
+    const EVENT_MODIFY_PURIFIER_CONFIG = 'modifyPurifierConfig';
+
     // Static
     // =========================================================================
 
@@ -61,72 +84,6 @@ class Field extends \craft\base\Field
      * @var array|null List of the paths that may contain Redactor plugins
      */
     private static $_pluginPaths;
-
-    /**
-     * @inheritdoc
-     */
-    public static function displayName(): string
-    {
-        return Craft::t('redactor', 'Redactor');
-    }
-
-    /**
-     * Registers a Redactor plugin's JS & CSS files.
-     *
-     * @param string $plugin
-     *
-     * @return void
-     * @throws InvalidConfigException if the plugin can't be found
-     */
-    public static function registerRedactorPlugin(string $plugin)
-    {
-        if (isset(self::$_registeredPlugins[$plugin])) {
-            return;
-        }
-
-        $paths = self::redactorPluginPaths();
-
-        foreach ($paths as $path) {
-            if (file_exists("{$path}/{$plugin}.js")) {
-                $view = Craft::$app->getView();
-                $baseUrl = Craft::$app->getAssetManager()->getPublishedUrl($path, true);
-                $view->registerJsFile("{$baseUrl}/{$plugin}.js", [
-                    'depends' => RedactorAsset::class
-                ]);
-                // CSS file too?
-                if (file_exists("{$path}/{$plugin}.css")) {
-                    $view->registerCssFile("{$baseUrl}/{$plugin}.css");
-                }
-                // Don't do this twice
-                self::$_registeredPlugins[$plugin] = true;
-                return;
-            }
-        }
-
-        throw new InvalidConfigException('Redactor plugin not found: '.$plugin);
-    }
-
-    /**
-     * Returns the registered Redactor plugin paths.
-     *
-     * @return string[]
-     */
-    public static function redactorPluginPaths(): array
-    {
-        if (self::$_pluginPaths !== null) {
-            return self::$_pluginPaths;
-        }
-
-        $event = new RegisterPluginPathsEvent([
-            'paths' => [
-                Craft::getAlias('@config/redactor/plugins'),
-                dirname(__DIR__).'/lib/redactor-plugins',
-            ]
-        ]);
-        Event::trigger(self::class, self::EVENT_REGISTER_PLUGIN_PATHS, $event);
-
-        return self::$_pluginPaths = $event->paths;
-    }
 
     // Properties
     // =========================================================================
@@ -143,8 +100,24 @@ class Field extends \craft\base\Field
 
     /**
      * @var bool Whether the HTML should be cleaned up on save
+     * @deprecated in 2.4
      */
     public $cleanupHtml = true;
+
+    /**
+     * @var bool Whether disallowed inline styles should be removed on save
+     */
+    public $removeInlineStyles = true;
+
+    /**
+     * @var bool Whether empty tags should be removed on save
+     */
+    public $removeEmptyTags = true;
+
+    /**
+     * @var bool Whether non-breaking spaces should be replaced by regular spaces on save
+     */
+    public $removeNbsp = true;
 
     /**
      * @var bool Whether the HTML should be purified on save
@@ -167,9 +140,152 @@ class Field extends \craft\base\Field
     public $availableTransforms = '*';
 
     /**
-     * @var string
+     * @var bool Whether to show input sources for volumes the user doesn’t have permission to view.
+     * @since 2.6.0
      */
-    private static $_redactorLang = 'en';
+    public $showUnpermittedVolumes = false;
+
+    /**
+     * @var bool Whether to show files the user doesn’t have permission to view, per the
+     * “View files uploaded by other users” permission.
+     * @since 2.6.0
+     */
+    public $showUnpermittedFiles = false;
+
+    /**
+     * @inheritdoc
+     */
+    public function __construct(array $config = [])
+    {
+        // normalize a mix/match of ids and uids to a list of uids.
+        if (isset($config['availableVolumes']) && is_array($config['availableVolumes'])) {
+            $ids = [];
+            $uids = [];
+
+            foreach ($config['availableVolumes'] as $availableVolume) {
+                if (is_int($availableVolume)) {
+                    $ids[] = $availableVolume;
+                } else {
+                    $uids[] = $availableVolume;
+                }
+            }
+
+            if (!empty($ids)) {
+                $uids = array_merge($uids, Db::uidsByIds('{{%volumes}}', $ids));
+            }
+
+            $config['availableVolumes'] = $uids;
+        }
+
+        // normalize a mix/match of ids and uids to a list of uids.
+        if (isset($config['availableTransforms']) && is_array($config['availableTransforms'])) {
+            $ids = [];
+            $uids = [];
+
+            foreach ($config['availableTransforms'] as $availableTransform) {
+                if (is_int($availableTransform)) {
+                    $ids[] = $availableTransform;
+                } else {
+                    $uids[] = $availableTransform;
+                }
+            }
+
+            if (!empty($ids)) {
+                $uids = array_merge($uids, Db::uidsByIds('{{%assettransforms}}', $ids));
+            }
+
+            $config['availableTransforms'] = $uids;
+        }
+
+        // configFile => redactorConfig
+        if (isset($config['configFile'])) {
+            $config['redactorConfig'] = ArrayHelper::remove($config, 'configFile');
+        }
+
+        // Default showUnpermittedVolumes to true for existing Redactor fields
+        if (isset($config['id']) && !isset($config['showUnpermittedVolumes'])) {
+            $config['showUnpermittedVolumes'] = true;
+        }
+
+        parent::__construct($config);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function init()
+    {
+        $this->showUnpermittedVolumes = (bool)$this->showUnpermittedVolumes;
+        $this->showUnpermittedFiles = (bool)$this->showUnpermittedFiles;
+        parent::init();
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public static function displayName(): string
+    {
+        return Craft::t('redactor', 'Redactor');
+    }
+
+    /**
+     * Registers a Redactor plugin's JS & CSS files.
+     *
+     * @param string $plugin
+     * @return void
+     * @throws InvalidConfigException if the plugin can't be found
+     */
+    public static function registerRedactorPlugin(string $plugin)
+    {
+        if (isset(self::$_registeredPlugins[$plugin])) {
+            return;
+        }
+
+        $paths = self::redactorPluginPaths();
+        $view = Craft::$app->getView();
+
+        foreach ($paths as $registeredPath) {
+            foreach (["{$registeredPath}/{$plugin}", $registeredPath] as $path) {
+                if (file_exists("{$path}/{$plugin}.js")) {
+                    $baseUrl = Craft::$app->getAssetManager()->getPublishedUrl($path, true);
+                    $view->registerJsFile("{$baseUrl}/{$plugin}.js", [
+                        'depends' => RedactorAsset::class
+                    ]);
+                    // CSS file too?
+                    if (file_exists("{$path}/{$plugin}.css")) {
+                        $view->registerCssFile("{$baseUrl}/{$plugin}.css");
+                    }
+                    // Don't do this twice
+                    self::$_registeredPlugins[$plugin] = true;
+                    return;
+                }
+            }
+        }
+
+        throw new InvalidConfigException('Redactor plugin not found: ' . $plugin);
+    }
+
+    /**
+     * Returns the registered Redactor plugin paths.
+     *
+     * @return string[]
+     */
+    public static function redactorPluginPaths(): array
+    {
+        if (self::$_pluginPaths !== null) {
+            return self::$_pluginPaths;
+        }
+
+        $event = new RegisterPluginPathsEvent([
+            'paths' => [
+                Craft::getAlias('@config/redactor/plugins'),
+                dirname(__DIR__) . '/lib/redactor-plugins',
+            ]
+        ]);
+        Event::trigger(self::class, self::EVENT_REGISTER_PLUGIN_PATHS, $event);
+
+        return self::$_pluginPaths = $event->paths;
+    }
 
     // Public Methods
     // =========================================================================
@@ -185,7 +301,7 @@ class Field extends \craft\base\Field
             if ($volume->hasUrls) {
                 $volumeOptions[] = [
                     'label' => Html::encode($volume->name),
-                    'value' => $volume->id
+                    'value' => $volume->uid
                 ];
             }
         }
@@ -194,7 +310,7 @@ class Field extends \craft\base\Field
         foreach (Craft::$app->getAssetTransforms()->getAllTransforms() as $transform) {
             $transformOptions[] = [
                 'label' => Html::encode($transform->name),
-                'value' => $transform->id
+                'value' => $transform->uid
             ];
         }
 
@@ -220,12 +336,17 @@ class Field extends \craft\base\Field
      */
     public function normalizeValue($value, ElementInterface $element = null)
     {
-        if ($value === null || $value instanceof FieldData) {
+        if ($value instanceof FieldData) {
             return $value;
         }
 
+        if (!$value) {
+            return null;
+        }
+
         // Prevent everyone from having to use the |raw filter when outputting RTE content
-        return new FieldData($value);
+        /** @var Element|null $element */
+        return new FieldData($value, $element->siteId ?? null);
     }
 
     /**
@@ -235,12 +356,26 @@ class Field extends \craft\base\Field
     {
         /** @var FieldData|null $value */
         /** @var Element $element */
-        $redactorConfig = $this->_getRedactorConfig();
-        $this->_registerFieldResources($redactorConfig);
 
+        // register the asset/redactor bundles
         $view = Craft::$app->getView();
+        $view->registerAssetBundle(FieldAsset::class);
+
+        // figure out which language we ended up with
+        /** @var RedactorAsset $bundle */
+        $bundle = $view->getAssetManager()->getBundle(RedactorAsset::class);
+        $redactorLang = $bundle::$redactorLanguage ?? 'en';
+
+        // register plugins
+        $redactorConfig = $this->_getRedactorConfig();
+        if (isset($redactorConfig['plugins'])) {
+            foreach ($redactorConfig['plugins'] as $plugin) {
+                static::registerRedactorPlugin($plugin);
+            }
+        }
+
         $id = $view->formatInputId($this->handle);
-        $site = ($element ? $element->getSite() : Craft::$app->getSites()->currentSite);
+        $site = ($element ? $element->getSite() : Craft::$app->getSites()->getCurrentSite());
 
         $settings = [
             'id' => $view->namespaceInputId($id),
@@ -249,7 +384,8 @@ class Field extends \craft\base\Field
             'transforms' => $this->_getTransforms(),
             'elementSiteId' => $site->id,
             'redactorConfig' => $redactorConfig,
-            'redactorLang' => self::$_redactorLang,
+            'redactorLang' => $redactorLang,
+            'showAllUploaders' => $this->showUnpermittedFiles,
         ];
 
         if ($this->translationMethod != self::TRANSLATION_METHOD_NONE) {
@@ -258,7 +394,8 @@ class Field extends \craft\base\Field
             $settings['direction'] = $locale->getOrientation();
         }
 
-        $view->registerJs('new Craft.RedactorInput('.Json::encode($settings).');');
+        RedactorAsset::registerTranslations($view);
+        $view->registerJs('new Craft.RedactorInput(' . Json::encode($settings) . ');');
 
         if ($value instanceof FieldData) {
             $value = $value->getRawContent();
@@ -272,7 +409,7 @@ class Field extends \craft\base\Field
             $value = str_replace('<!--pagebreak-->', '<hr class="redactor_pagebreak" style="display:none" unselectable="on" contenteditable="false" />', $value);
         }
 
-        return '<textarea id="'.$id.'" name="'.$this->handle.'" style="display: none">'.htmlentities($value, ENT_NOQUOTES, 'UTF-8').'</textarea>';
+        return '<textarea id="' . $id . '" name="' . $this->handle . '" style="display: none">' . htmlentities($value, ENT_NOQUOTES, 'UTF-8') . '</textarea>';
     }
 
     /**
@@ -281,7 +418,7 @@ class Field extends \craft\base\Field
     public function getStaticHtml($value, ElementInterface $element): string
     {
         /** @var FieldData|null $value */
-        return '<div class="text">'.($value ?: '&nbsp;').'</div>';
+        return '<div class="text">' . ($value ?: '&nbsp;') . '</div>';
     }
 
     /**
@@ -301,14 +438,14 @@ class Field extends \craft\base\Field
     /**
      * @inheritdoc
      */
-    public function isEmpty($value): bool
+    public function isValueEmpty($value, ElementInterface $element): bool
     {
         if ($value === null) {
             return true;
         }
 
         /** @var FieldData $value */
-        return parent::isEmpty($value->getRawContent());
+        return parent::isValueEmpty($value->getRawContent(), $element);
     }
 
     /**
@@ -341,25 +478,48 @@ class Field extends \craft\base\Field
                 $value = HtmlPurifier::process($value, $this->_getPurifierConfig());
             }
 
-            if ($this->cleanupHtml) {
-                // Remove <span> and <font> tags
-                $value = preg_replace('/<(?:span|font)\b[^>]*>/', '', $value);
-                $value = preg_replace('/<\/(?:span|font)>/', '', $value);
+            if ($this->removeInlineStyles) {
+                // Remove <font> tags
+                $value = preg_replace('/<(?:\/)?font\b[^>]*>/', '', $value);
 
-                // Remove inline styles
-                $value = preg_replace('/(<(?:h1|h2|h3|h4|h5|h6|p|div|blockquote|pre|strong|em|b|i|u|a)\b[^>]*)\s+style="[^"]*"/', '$1', $value);
+                // Remove disallowed inline styles
+                $allowedStyles = $this->_allowedStyles();
+                $value = preg_replace_callback(
+                    '/(<(?:h1|h2|h3|h4|h5|h6|p|div|blockquote|pre|strong|em|b|i|u|a|span|img)\b[^>]*)\s+style="([^"]*)"/',
+                    function(array $matches) use ($allowedStyles) {
+                        // Only allow certain styles through
+                        $allowed = [];
+                        $styles = explode(';', $matches[2]);
+                        foreach ($styles as $style) {
+                            list($name, $value) = array_map('trim', array_pad(explode(':', $style, 2), 2, ''));
+                            if (isset($allowedStyles[$name])) {
+                                $allowed[] = "{$name}: {$value}";
+                            }
+                        }
+                        return $matches[1] . (!empty($allowed) ? ' style="' . implode('; ', $allowed) . '"' : '');
+                    },
+                    $value
+                );
+            }
 
+            if ($this->removeEmptyTags) {
                 // Remove empty tags
-                $value = preg_replace('/<(h1|h2|h3|h4|h5|h6|p|div|blockquote|pre|strong|em|a|b|i|u)\s*><\/\1>/', '', $value);
+                $value = preg_replace('/<(h1|h2|h3|h4|h5|h6|p|div|blockquote|pre|strong|em|a|b|i|u|span)\s*><\/\1>/', '', $value);
+            }
+
+            if ($this->removeNbsp) {
+                // Replace non-breaking spaces with regular spaces
+                $value = preg_replace('/(&nbsp;|&#160;|\x{00A0})/u', ' ', $value);
+                $value = preg_replace('/  +/', ' ', $value);
             }
         }
 
         // Find any element URLs and swap them with ref tags
         $value = preg_replace_callback(
-            '/(href=|src=)([\'"])[^\'"#]+?(#[^\'"#]+)?(?:#|%23)([\w\\\\]+)\:(\d+)(\:(?:transform\:)?'.HandleValidator::$handlePattern.')?\2/',
+            '/(href=|src=)([\'"])[^\'"#]+?(#[^\'"#]+)?(?:#|%23)([\w\\\\]+)\:(\d+)(?:@(\d+))?(\:(?:transform\:)?' . HandleValidator::$handlePattern . ')?\2/',
             function($matches) {
                 // Create the ref tag, and make sure :url is in there
-                $refTag = '{'.$matches[4].':'.$matches[5].(!empty($matches[6]) ? $matches[6] : ':url').'}';
+                $refTag = '{' . $matches[4] . ':' . $matches[5] . (!empty($matches[6]) ? '@' . $matches[6] : '') . (!empty($matches[7]) ? $matches[7] : ':url') . '}';
                 $hash = (!empty($matches[3]) ? $matches[3] : '');
 
                 if ($hash) {
@@ -372,7 +532,7 @@ class Field extends \craft\base\Field
                     }
                 }
 
-                return $matches[1].$matches[2].$refTag.$hash.$matches[2];
+                return $matches[1] . $matches[2] . $refTag . $hash . $matches[2];
             },
             $value);
 
@@ -393,7 +553,6 @@ class Field extends \craft\base\Field
      *
      * @param string $value
      * @param ElementInterface|null $element
-     *
      * @return string
      */
     private function _parseRefs(string $value, ElementInterface $element = null): string
@@ -402,20 +561,18 @@ class Field extends \craft\base\Field
             return $value;
         }
 
-        return preg_replace_callback('/(href=|src=)([\'"])(\{([\w\\\\]+\:\d+\:(?:transform\:)?'.HandleValidator::$handlePattern.')\})(#[^\'"#]+)?\2/', function($matches) use ($element) {
+        return preg_replace_callback('/(href=|src=)([\'"])(\{([\w\\\\]+\:\d+(?:@\d+)?\:(?:transform\:)?' . HandleValidator::$handlePattern . ')\})(#[^\'"#]+)?\2/', function($matches) use ($element) {
             /** @var Element|null $element */
             list (, $attr, $q, $refTag, $ref) = $matches;
             $fragment = $matches[5] ?? '';
 
-            return $attr.$q.Craft::$app->getElements()->parseRefs($refTag, $element->siteId ?? null).$fragment.'#'.$ref.$q;
+            return $attr . $q . Craft::$app->getElements()->parseRefs($refTag, $element->siteId ?? null) . $fragment . '#' . $ref . $q;
         }, $value);
     }
 
     /**
      * Returns the link options available to the field.
-     *
      * Each link option is represented by an array with the following keys:
-     *
      * - `optionTitle` (required) – the user-facing option title that appears in the Link dropdown menu
      * - `elementType` (required) – the element type class that the option should be linking to
      * - `sources` (optional) – the sources that the user should be able to select elements from
@@ -423,7 +580,6 @@ class Field extends \craft\base\Field
      * - `storageKey` (optional) – the localStorage key that should be used to store the element selector modal state (defaults to RedactorInput.LinkTo[ElementType])
      *
      * @param Element|null $element The element the field is associated with, if there is one
-     *
      * @return array
      */
     private function _getLinkOptions(Element $element = null): array
@@ -474,7 +630,6 @@ class Field extends \craft\base\Field
      * Returns the available section sources.
      *
      * @param Element|null $element The element the field is associated with, if there is one
-     *
      * @return array
      */
     private function _getSectionSources(Element $element = null): array
@@ -483,14 +638,18 @@ class Field extends \craft\base\Field
         $sections = Craft::$app->getSections()->getAllSections();
         $showSingles = false;
 
+        // Get all sites
+        $sites = Craft::$app->getSites()->getAllSites();
+
         foreach ($sections as $section) {
             if ($section->type === Section::TYPE_SINGLE) {
                 $showSingles = true;
             } else if ($element) {
-                // Does the section have URLs in the same site as the element we're editing?
                 $sectionSiteSettings = $section->getSiteSettings();
-                if (isset($sectionSiteSettings[$element->siteId]) && $sectionSiteSettings[$element->siteId]->hasUrls) {
-                    $sources[] = 'section:'.$section->id;
+                foreach ($sites as $site) {
+                    if (isset($sectionSiteSettings[$site->id]) && $sectionSiteSettings[$site->id]->hasUrls) {
+                        $sources[] = 'section:' . $section->uid;
+                    }
                 }
             }
         }
@@ -506,7 +665,6 @@ class Field extends \craft\base\Field
      * Returns the available category sources.
      *
      * @param Element|null $element The element the field is associated with, if there is one
-     *
      * @return array
      */
     private function _getCategorySources(Element $element = null): array
@@ -520,7 +678,7 @@ class Field extends \craft\base\Field
                 // Does the category group have URLs in the same site as the element we're editing?
                 $categoryGroupSiteSettings = $categoryGroup->getSiteSettings();
                 if (isset($categoryGroupSiteSettings[$element->siteId]) && $categoryGroupSiteSettings[$element->siteId]->hasUrls) {
-                    $sources[] = 'group:'.$categoryGroup->id;
+                    $sources[] = 'group:' . $categoryGroup->uid;
                 }
             }
         }
@@ -541,9 +699,18 @@ class Field extends \craft\base\Field
 
         $criteria = ['parentId' => ':empty:'];
 
-        if ($this->availableVolumes !== '*') {
-            $criteria['volumeId'] = $this->availableVolumes;
+        $allVolumes = Craft::$app->getVolumes()->getAllVolumes();
+        $allowedVolumes = [];
+        $userService = Craft::$app->getUser();
+
+        foreach ($allVolumes as $volume) {
+            $allowedBySettings = $this->availableVolumes === '*' || (is_array($this->availableVolumes) && in_array($volume->uid, $this->availableVolumes));
+            if ($allowedBySettings && ($this->showUnpermittedVolumes || $userService->checkPermission("viewVolume:{$volume->uid}"))) {
+                $allowedVolumes[] = $volume->uid;
+            }
         }
+
+        $criteria['volumeId'] = Db::idsByUids('{{%volumes}}', $allowedVolumes);
 
         $folders = Craft::$app->getAssets()->findFolders($criteria);
 
@@ -562,7 +729,7 @@ class Field extends \craft\base\Field
         });
 
         foreach ($folders as $folder) {
-            $volumeKeys[] = 'folder:'.$folder->id;
+            $volumeKeys[] = 'folder:' . $folder->uid;
         }
 
         return $volumeKeys;
@@ -583,7 +750,7 @@ class Field extends \craft\base\Field
         $transformList = [];
 
         foreach ($allTransforms as $transform) {
-            if (!is_array($this->availableTransforms) || in_array($transform->id, $this->availableTransforms, false)) {
+            if (!is_array($this->availableTransforms) || in_array($transform->uid, $this->availableTransforms, false)) {
                 $transformList[] = [
                     'handle' => Html::encode($transform->handle),
                     'name' => Html::encode($transform->name)
@@ -598,13 +765,12 @@ class Field extends \craft\base\Field
      * Returns the available Redactor config options.
      *
      * @param string $dir The directory name within the config/ folder to look for config files
-     *
      * @return array
      */
     private function _getCustomConfigOptions(string $dir): array
     {
         $options = ['' => Craft::t('redactor', 'Default')];
-        $path = Craft::$app->getPath()->getConfigPath().DIRECTORY_SEPARATOR.$dir;
+        $path = Craft::$app->getPath()->getConfigPath() . DIRECTORY_SEPARATOR . $dir;
 
         if (is_dir($path)) {
             $files = FileHelper::findFiles($path, [
@@ -623,9 +789,8 @@ class Field extends \craft\base\Field
     /**
      * Returns a JSON-decoded config, if it exists.
      *
-     * @param string      $dir  The directory name within the config/ folder to look for the config file
+     * @param string $dir The directory name within the config/ folder to look for the config file
      * @param string|null $file The filename to load
-     *
      * @return array|false The config, or false if the file doesn't exist
      */
     private function _getConfig(string $dir, string $file = null)
@@ -634,7 +799,7 @@ class Field extends \craft\base\Field
             return false;
         }
 
-        $path = Craft::$app->getPath()->getConfigPath().DIRECTORY_SEPARATOR.$dir.DIRECTORY_SEPARATOR.$file;
+        $path = Craft::$app->getPath()->getConfigPath() . DIRECTORY_SEPARATOR . $dir . DIRECTORY_SEPARATOR . $file;
 
         if (!is_file($path)) {
             return false;
@@ -656,98 +821,54 @@ class Field extends \craft\base\Field
     /**
      * Returns the HTML Purifier config used by this field.
      *
-     * @return array
+     * @return HTMLPurifier_Config
      */
-    private function _getPurifierConfig(): array
+    private function _getPurifierConfig(): HTMLPurifier_Config
     {
+        $purifierConfig = HTMLPurifier_Config::createDefault();
+        $purifierConfig->autoFinalize = false;
+
         if ($config = $this->_getConfig('htmlpurifier', $this->purifierConfig)) {
-            return $config;
-        }
-
-        // Default config
-        return [
-            'Attr.AllowedFrameTargets' => ['_blank'],
-            'HTML.AllowedComments' => ['pagebreak'],
-        ];
-    }
-
-    /**
-     * Registers the front end resources for the field.
-     *
-     * @param array $redactorConfig
-     *
-     * @return void
-     */
-    private function _registerFieldResources(array $redactorConfig)
-    {
-        $view = Craft::$app->getView();
-
-        $view->registerAssetBundle(FieldAsset::class);
-
-        if (isset($redactorConfig['plugins'])) {
-            foreach ($redactorConfig['plugins'] as $plugin) {
-                static::registerRedactorPlugin($plugin);
+            foreach ($config as $option => $value) {
+                $purifierConfig->set($option, $value);
             }
+        } else {
+            $purifierConfig->set('Attr.AllowedFrameTargets', ['_blank']);
+            $purifierConfig->set('Attr.EnableID', true);
+            $purifierConfig->set('HTML.AllowedComments', ['pagebreak']); // remove this later!
         }
 
-        // Check to see if the Redactor has been translated into the current site
-        if (Craft::$app->language != Craft::$app->sourceLanguage) {
-            // First try to include the actual target language
-            if (!$this->_includeRedactorLangFile(Craft::$app->language)) {
-                // Otherwise try to load the language (without the territory half)
-                $languageId = Craft::$app->getLocale()->getLanguageID();
-                $this->_includeRedactorLangFile($languageId);
-            }
-        }
-
-        $customTranslations = [
-            'fullscreen' => Craft::t('redactor', 'Fullscreen'),
-            'insert-page-break' => Craft::t('redactor', 'Insert Page Break'),
-            'table' => Craft::t('redactor', 'Table'),
-            'insert-table' => Craft::t('redactor', 'Insert table'),
-            'insert-row-above' => Craft::t('redactor', 'Insert row above'),
-            'insert-row-below' => Craft::t('redactor', 'Insert row below'),
-            'insert-column-left' => Craft::t('redactor', 'Insert column left'),
-            'insert-column-right' => Craft::t('redactor', 'Insert column right'),
-            'add-head' => Craft::t('redactor', 'Add head'),
-            'delete-head' => Craft::t('redactor', 'Delete head'),
-            'delete-column' => Craft::t('redactor', 'Delete column'),
-            'delete-row' => Craft::t('redactor', 'Delete row'),
-            'delete-table' => Craft::t('redactor', 'Delete table'),
-            'video' => Craft::t('redactor', 'Video'),
-            'video-html-code' => Craft::t('redactor', 'Video Embed Code or Youtube/Vimeo Link'),
-        ];
-
-        $view->registerJs(
-            '$.extend($.Redactor.opts.langs["'.self::$_redactorLang.'"], '.
-            Json::encode($customTranslations).
-            ');');
-    }
-
-    /**
-     * Attempts to include a Redactor language file.
-     *
-     * @param string $lang
-     *
-     * @return bool
-     */
-    private function _includeRedactorLangFile(string $lang): bool
-    {
-        $redactorPath = Craft::getAlias('@lib/redactor');
-        $subPath = "lang/{$lang}.js";
-        $fullPath = $redactorPath.'/'.$subPath;
-
-        if (!is_file($fullPath)) {
-            return false;
-        }
-
-        $am = Craft::$app->getAssetManager();
-        $view = Craft::$app->getView();
-        $view->registerJsFile($am->getPublishedUrl($redactorPath, true, $subPath), [
-            'depends' => RedactorAsset::class
+        // Give plugins a chance to modify the HTML Purifier config, or add new ones
+        $event = new ModifyPurifierConfigEvent([
+            'config' => $purifierConfig,
         ]);
-        self::$_redactorLang = $lang;
 
-        return true;
+        $this->trigger(self::EVENT_MODIFY_PURIFIER_CONFIG, $event);
+
+        return $event->config;
+    }
+
+    /**
+     * Returns the allowed inline CSS styles, based on the plugins that are enabled.
+     *
+     * @return string[]
+     */
+    private function _allowedStyles(): array
+    {
+        $styles = [];
+        $plugins = array_flip($this->_getRedactorConfig()['plugins'] ?? []);
+        if (isset($plugins['alignment'])) {
+            $styles['text-align'] = true;
+        }
+        if (isset($plugins['fontcolor'])) {
+            $styles['color'] = true;
+        }
+        if (isset($plugins['fontfamily'])) {
+            $styles['font-family'] = true;
+        }
+        if (isset($plugins['fontsize'])) {
+            $styles['font-size'] = true;
+        }
+        return $styles;
     }
 }

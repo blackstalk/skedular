@@ -8,9 +8,9 @@
 namespace yii\queue;
 
 /**
- * Interface Job
+ * Job Interface.
  *
- * @deprecated Will be removed in 2.1.0. Use JobInterface instead of Job.
+ * @deprecated Will be removed in 3.0. Use JobInterface instead of Job.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */

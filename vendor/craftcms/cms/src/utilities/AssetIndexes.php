@@ -17,13 +17,10 @@ use craft\web\assets\assetindexes\AssetIndexesAsset;
  * AssetIndexes represents a AssetIndexes dashboard widget.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class AssetIndexes extends Utility
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -55,10 +52,10 @@ class AssetIndexes extends Utility
     {
         /** @var Volume[] $volumes */
         $volumes = Craft::$app->getVolumes()->getAllVolumes();
-        $sourceOptions = [];
+        $volumeOptions = [];
 
         foreach ($volumes as $volume) {
-            $sourceOptions[] = [
+            $volumeOptions[] = [
                 'label' => Html::encode($volume->name),
                 'value' => $volume->id
             ];
@@ -66,8 +63,8 @@ class AssetIndexes extends Utility
 
         $view = Craft::$app->getView();
         $checkboxSelectHtml = $view->renderTemplate('_includes/forms/checkboxSelect', [
-            'name' => 'sources',
-            'options' => $sourceOptions,
+            'name' => 'volumes',
+            'options' => $volumeOptions,
             'showAllOption' => true,
             'values' => '*',
         ]);

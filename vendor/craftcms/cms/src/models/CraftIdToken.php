@@ -14,13 +14,10 @@ use DateTime;
  * Class CraftIdToken model.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class CraftIdToken extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null
      */
@@ -35,11 +32,6 @@ class CraftIdToken extends Model
      * @var string|null
      */
     public $accessToken;
-
-    /**
-     * @var string|null
-     */
-    public $refreshToken;
 
     /**
      * @var DateTime|null
@@ -60,9 +52,6 @@ class CraftIdToken extends Model
      * @var string
      */
     public $uid;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Has token expired.

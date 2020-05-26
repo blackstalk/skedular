@@ -11,6 +11,8 @@ use Craft;
 use craft\base\ElementInterface;
 use craft\base\Field;
 use craft\base\PreviewableFieldInterface;
+use craft\base\SortableFieldInterface;
+use craft\gql\types\Number as NumberType;
 use craft\helpers\Db;
 use craft\helpers\Localization;
 use craft\i18n\Locale;
@@ -19,13 +21,10 @@ use craft\i18n\Locale;
  * Number represents a Number field.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class Number extends Field implements PreviewableFieldInterface
+class Number extends Field implements PreviewableFieldInterface, SortableFieldInterface
 {
-    // Static
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
@@ -34,8 +33,18 @@ class Number extends Field implements PreviewableFieldInterface
         return Craft::t('app', 'Number');
     }
 
-    // Properties
-    // =========================================================================
+    /**
+     * @inheritdoc
+     */
+    public static function valueType(): string
+    {
+        return 'int|float|null';
+    }
+
+    /**
+     * @var int|float|null The default value for new elements
+     */
+    public $defaultValue;
 
     /**
      * @var int|float The minimum allowed number
@@ -57,8 +66,31 @@ class Number extends Field implements PreviewableFieldInterface
      */
     public $size;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|null Text that should be displayed before the input
+     */
+    public $prefix;
+
+    /**
+     * @var string|null Text that should be displayed after the input
+     */
+    public $suffix;
+
+    /**
+     * @inheritdoc
+     * @since 3.5.0
+     */
+    public function __construct($config = [])
+    {
+        // Normalize number settings
+        foreach (['defaultValue', 'min', 'max'] as $name) {
+            if (isset($config[$name]) && is_array($config[$name])) {
+                $config[$name] = Localization::normalizeNumber($config[$name]['value'], $config[$name]['locale']);
+            }
+        }
+
+        parent::__construct($config);
+    }
 
     /**
      * @inheritdoc
@@ -67,18 +99,28 @@ class Number extends Field implements PreviewableFieldInterface
     {
         parent::init();
 
+        // Normalize $defaultValue
+        if ($this->defaultValue === '') {
+            $this->defaultValue = null;
+        }
+
         // Normalize $max
-        if ($this->max !== null && empty($this->max)) {
+        if ($this->max === '') {
             $this->max = null;
         }
 
         // Normalize $min
-        if ($this->min !== null && empty($this->min)) {
+        if ($this->min === '') {
             $this->min = null;
         }
 
+        // Normalize $decimals
+        if (!$this->decimals) {
+            $this->decimals = 0;
+        }
+
         // Normalize $size
-        if ($this->size !== null && empty($this->size)) {
+        if ($this->size !== null && !$this->size) {
             $this->size = null;
         }
     }
@@ -86,10 +128,10 @@ class Number extends Field implements PreviewableFieldInterface
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        $rules = parent::rules();
-        $rules[] = [['min', 'max'], 'number'];
+        $rules = parent::defineRules();
+        $rules[] = [['defaultValue', 'min', 'max'], 'number'];
         $rules[] = [['decimals', 'size'], 'integer'];
         $rules[] = [
             ['max'],
@@ -99,7 +141,7 @@ class Number extends Field implements PreviewableFieldInterface
         ];
 
         if (!$this->decimals) {
-            $rules[] = [['min', 'max'], 'integer'];
+            $rules[] = [['defaultValue', 'min', 'max'], 'integer'];
         }
 
         return $rules;
@@ -129,9 +171,29 @@ class Number extends Field implements PreviewableFieldInterface
      */
     public function normalizeValue($value, ElementInterface $element = null)
     {
+        if ($value === null) {
+            if ($this->defaultValue !== null && $this->isFresh($element)) {
+                return $this->defaultValue;
+            }
+            return null;
+        }
+
         // Was this submitted with a locale ID?
         if (isset($value['locale'], $value['value'])) {
             $value = Localization::normalizeNumber($value['value'], $value['locale']);
+        }
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (is_string($value) && is_numeric($value)) {
+            if ((int)$value == $value) {
+                return (int)$value;
+            }
+            if ((float)$value == $value) {
+                return (float)$value;
+            }
         }
 
         return $value;
@@ -142,20 +204,20 @@ class Number extends Field implements PreviewableFieldInterface
      */
     public function getInputHtml($value, ElementInterface $element = null): string
     {
-        $decimals = $this->decimals;
-
         // If decimals is 0 (or null, empty for whatever reason), don't run this
-        if ($decimals) {
+        if ($value !== null && $this->decimals) {
             $decimalSeparator = Craft::$app->getLocale()->getNumberSymbol(Locale::SYMBOL_DECIMAL_SEPARATOR);
-            $value = number_format($value, $decimals, $decimalSeparator, '');
+            try {
+                $value = number_format($value, $this->decimals, $decimalSeparator, '');
+            } catch (\Throwable $e) {
+                // NaN
+            }
         }
 
-        return '<input type="hidden" name="'.$this->handle.'[locale]" value="'.Craft::$app->language.'">'.
-            Craft::$app->getView()->renderTemplate('_includes/forms/text', [
-                'name' => $this->handle.'[value]',
-                'value' => $value,
-                'size' => $this->size
-            ]);
+        return Craft::$app->getView()->renderTemplate('_components/fieldtypes/Number/input', [
+            'field' => $this,
+            'value' => $value,
+        ]);
     }
 
     /**
@@ -164,7 +226,27 @@ class Number extends Field implements PreviewableFieldInterface
     public function getElementValidationRules(): array
     {
         return [
-            ['number', 'min' => $this->min ?: null, 'max' => $this->max ?: null],
+            ['number', 'min' => $this->min, 'max' => $this->max],
         ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getTableAttributeHtml($value, ElementInterface $element): string
+    {
+        if ($value === null) {
+            return '';
+        }
+
+        return Craft::$app->getFormatter()->asDecimal($value, $this->decimals);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function getContentGqlType()
+    {
+        return NumberType::getType();
     }
 }

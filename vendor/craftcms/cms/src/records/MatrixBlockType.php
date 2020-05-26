@@ -8,6 +8,7 @@
 namespace craft\records;
 
 use craft\db\ActiveRecord;
+use craft\db\Table;
 use craft\validators\HandleValidator;
 use yii\db\ActiveQueryInterface;
 
@@ -23,22 +24,14 @@ use yii\db\ActiveQueryInterface;
  * @property Field $field Field
  * @property FieldLayout $fieldLayout Field layout
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class MatrixBlockType extends ActiveRecord
 {
-    // Properties
-    // =========================================================================
-
     /**
-     * Whether the Name and Handle attributes should validated to ensure they’re unique.
-     *
-     * @var bool
+     * @var bool Whether the Name and Handle attributes should validated to ensure they’re unique.
      */
     public $validateUniques = true;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -70,7 +63,7 @@ class MatrixBlockType extends ActiveRecord
      */
     public static function tableName(): string
     {
-        return '{{%matrixblocktypes}}';
+        return Table::MATRIXBLOCKTYPES;
     }
 
     /**

@@ -7,18 +7,17 @@
 
 namespace craft\search;
 
+use yii\base\BaseObject;
+
 /**
  * Search Query Term class
  * Represents a term in the search query.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
-class SearchQueryTerm
+class SearchQueryTerm extends BaseObject
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var bool
      */
@@ -37,7 +36,7 @@ class SearchQueryTerm
     /**
      * @var bool
      */
-    public $subRight = false;
+    public $subRight = true;
 
     /**
      * @var null

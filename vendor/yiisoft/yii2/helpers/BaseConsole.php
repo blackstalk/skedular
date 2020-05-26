@@ -622,7 +622,7 @@ class BaseConsole
         if (static::isRunningOnWindows()) {
             $output = [];
             exec('mode con', $output);
-            if (isset($output, $output[1]) && strpos($output[1], 'CON') !== false) {
+            if (isset($output[1]) && strpos($output[1], 'CON') !== false) {
                 return $size = [(int) preg_replace('~\D~', '', $output[4]), (int) preg_replace('~\D~', '', $output[3])];
             }
         } else {
@@ -684,7 +684,7 @@ class BaseConsole
             return $text;
         }
         $pad = str_repeat(' ', $indent);
-        $lines = explode("\n", wordwrap($text, $size[0] - $indent, "\n", true));
+        $lines = explode("\n", wordwrap($text, $size[0] - $indent, "\n"));
         $first = true;
         foreach ($lines as $i => $line) {
             if ($first) {
@@ -897,7 +897,7 @@ class BaseConsole
     /**
      * Starts display of a progress bar on screen.
      *
-     * This bar will be updated by [[updateProgress()]] and my be ended by [[endProgress()]].
+     * This bar will be updated by [[updateProgress()]] and may be ended by [[endProgress()]].
      *
      * The following example shows a simple usage of a progress bar:
      *
@@ -911,6 +911,7 @@ class BaseConsole
      * ```
      *
      * Git clone like progress (showing only status information):
+     *
      * ```php
      * Console::startProgress(0, 1000, 'Counting objects: ', false);
      * for ($n = 1; $n <= 1000; $n++) {

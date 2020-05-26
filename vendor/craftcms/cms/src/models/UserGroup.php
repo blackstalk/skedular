@@ -13,19 +13,14 @@ use craft\records\UserGroup as UserGroupRecord;
 use craft\validators\HandleValidator;
 use craft\validators\UniqueValidator;
 
-Craft::$app->requireEdition(Craft::Pro);
-
 /**
  * UserGroup model class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class UserGroup extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -41,21 +36,34 @@ class UserGroup extends Model
      */
     public $handle;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|null UID
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    public function attributeLabels()
     {
         return [
-            [['id'], 'number', 'integerOnly' => true],
-            [['name', 'handle'], 'required'],
-            [['name', 'handle'], 'string', 'max' => 255],
-            [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']],
-            [['name', 'handle'], UniqueValidator::class, 'targetClass' => UserGroupRecord::class],
+            'handle' => Craft::t('app', 'Handle'),
+            'name' => Craft::t('app', 'Name'),
         ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    protected function defineRules(): array
+    {
+        $rules = parent::defineRules();
+        $rules[] = [['id'], 'number', 'integerOnly' => true];
+        $rules[] = [['name', 'handle'], 'required'];
+        $rules[] = [['name', 'handle'], 'string', 'max' => 255];
+        $rules[] = [['handle'], HandleValidator::class, 'reservedWords' => ['id', 'dateCreated', 'dateUpdated', 'uid', 'title']];
+        $rules[] = [['name', 'handle'], UniqueValidator::class, 'targetClass' => UserGroupRecord::class];
+        return $rules;
     }
 
     /**
@@ -65,7 +73,7 @@ class UserGroup extends Model
      */
     public function __toString(): string
     {
-        return Craft::t('site', $this->name);
+        return Craft::t('site', $this->name) ?: static::class;
     }
 
     /**

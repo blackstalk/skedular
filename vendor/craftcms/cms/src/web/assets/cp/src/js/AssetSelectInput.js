@@ -24,13 +24,69 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
 
             this.base.apply(this, arguments);
             this._attachUploader();
+
+            this.addListener(this.$elementsContainer, 'keydown', this._onKeyDown.bind(this));
+            this.elementSelect.on('focusItem', this._onElementFocus.bind(this));
         },
 
+        /**
+         * Handle a keypress
+         * @private
+         */
+        _onKeyDown: function(ev) {
+            if (ev.keyCode === Garnish.SPACE_KEY && ev.shiftKey) {
+                if (Craft.PreviewFileModal.openInstance) {
+                    Craft.PreviewFileModal.openInstance.selfDestruct();
+                } else {
+                    var $element = this.elementSelect.$focusedItem;
+
+                    if ($element.length) {
+                        this._loadPreview($element);
+                    }
+                }
+
+                ev.stopPropagation();
+
+                return false;
+            }
+        },
+
+        /**
+         * Handle element being focused
+         * @private
+         */
+        _onElementFocus: function(ev) {
+            var $element = $(ev.item);
+
+            if (Craft.PreviewFileModal.openInstance && $element.length) {
+                this._loadPreview($element);
+            }
+        },
+
+        /**
+         * Load the preview for an Asset element
+         * @private
+         */
+        _loadPreview: function($element) {
+            var settings = {};
+
+            if ($element.data('image-width')) {
+                settings.startingWidth = $element.data('image-width');
+                settings.startingHeight = $element.data('image-height');
+            }
+
+            new Craft.PreviewFileModal($element.data('id'), this.elementSelect, settings);
+        },
+
+        /**
+         * Create the element editor
+         */
         createElementEditor: function($element) {
-            return Craft.createElementEditor(this.settings.elementType, $element, {
+            return this.base($element, {
                 params: {
                     defaultFieldLayoutId: this.settings.defaultFieldLayoutId
-                }
+                },
+                input: this
             });
         },
 
@@ -41,7 +97,7 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
             this.progressBar = new Craft.ProgressBar($('<div class="progress-shade"></div>').appendTo(this.$container));
 
             var options = {
-                url: Craft.getActionUrl('assets/save-asset'),
+                url: Craft.getActionUrl('assets/upload'),
                 dropZone: this.$container,
                 formData: {
                     fieldId: this.settings.fieldId,
@@ -67,6 +123,24 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
             options.events.fileuploaddone = $.proxy(this, '_onUploadComplete');
 
             this.uploader = new Craft.Uploader(this.$container, options);
+        },
+
+        refreshThumbnail: function(elementId) {
+            var parameters = {
+                elementId: elementId,
+                siteId: this.settings.criteria.siteId,
+                size: this.settings.viewMode
+            };
+
+            Craft.postActionRequest('elements/get-element-html', parameters, function(data) {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    var $existing = this.$elements.filter('[data-id="' + elementId + '"]');
+                    $existing.find('.elementthumb').replaceWith($(data.html).find('.elementthumb'));
+                    this.thumbLoader.load($existing);
+                }
+            }.bind(this));
         },
 
         /**
@@ -128,9 +202,13 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
             if (data.result.error) {
                 alert(data.result.error);
             } else {
-                var elementId = data.result.assetId;
+                var parameters = {
+                    elementId: data.result.assetId,
+                    siteId: this.settings.criteria.siteId,
+                    size: this.settings.viewMode
+                };
 
-                Craft.postActionRequest('elements/get-element-html', {elementId: elementId, siteId: this.settings.criteria.siteId}, function (data) {
+                Craft.postActionRequest('elements/get-element-html', parameters, function(data) {
                     if (data.error) {
                         alert(data.error);
                     } else {
@@ -143,6 +221,10 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
                     if (this.uploader.isLastUpload()) {
                         this.progressBar.hideProgressBar();
                         this.$container.removeClass('uploading');
+
+                        if (window.draftEditor) {
+                            window.draftEditor.checkForm();
+                        }
                     }
                 }.bind(this));
 
@@ -203,7 +285,6 @@ Craft.AssetSelectInput = Craft.BaseElementSelectInput.extend(
                     range.moveStart("character", startPos);
                     range.select();
                 }
-
             }, this));
         },
 

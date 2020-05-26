@@ -17,13 +17,10 @@ use craft\validators\UniqueValidator;
  * FieldGroup model class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class FieldGroup extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -34,20 +31,32 @@ class FieldGroup extends Model
      */
     public $name;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|null UID
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    public function attributeLabels()
     {
         return [
-            [['id'], 'number', 'integerOnly' => true],
-            [['name'], 'string', 'max' => 255],
-            [['name'], UniqueValidator::class, 'targetClass' => FieldGroupRecord::class],
-            [['name'], 'required'],
+            'name' => Craft::t('app', 'Name'),
         ];
+    }
+
+    /**
+     * @inheritdoc
+     */
+    protected function defineRules(): array
+    {
+        $rules = parent::defineRules();
+        $rules[] = [['id'], 'number', 'integerOnly' => true];
+        $rules[] = [['name'], 'string', 'max' => 255];
+        $rules[] = [['name'], UniqueValidator::class, 'targetClass' => FieldGroupRecord::class];
+        $rules[] = [['name'], 'required'];
+        return $rules;
     }
 
     /**
@@ -57,7 +66,7 @@ class FieldGroup extends Model
      */
     public function __toString(): string
     {
-        return (string)$this->name;
+        return (string)$this->name ?: static::class;
     }
 
     /**

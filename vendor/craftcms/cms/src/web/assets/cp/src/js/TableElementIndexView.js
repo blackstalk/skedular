@@ -20,10 +20,6 @@ Craft.TableElementIndexView = Craft.BaseElementIndexView.extend(
         },
 
         afterInit: function() {
-            // Make the table collapsible for mobile devices
-            Craft.cp.$collapsibleTables = Craft.cp.$collapsibleTables.add(this.$table);
-            Craft.cp.updateResponsiveTables();
-
             // Set the sort header
             this.initTableHeaders();
 
@@ -147,17 +143,8 @@ Craft.TableElementIndexView = Craft.BaseElementIndexView.extend(
             Craft.cp.updateResponsiveTables();
         },
 
-        destroy: function() {
-            if (this.$table) {
-                // Remove the soon-to-be-wiped-out table from the list of collapsible tables
-                Craft.cp.$collapsibleTables = Craft.cp.$collapsibleTables.not(this.$table);
-            }
-
-            this.base();
-        },
-
         createElementEditor: function($element) {
-            Craft.createElementEditor(this.elementIndex.elementType, $element, {
+            Craft.createElementEditor($element.data('type'), $element, {
                 params: {
                     includeTableAttributesForSource: this.elementIndex.sourceKey
                 },
@@ -165,7 +152,8 @@ Craft.TableElementIndexView = Craft.BaseElementIndexView.extend(
                     if (response.tableAttributes) {
                         this._updateTableAttributes($element, response.tableAttributes);
                     }
-                }, this)
+                }, this),
+                elementIndex: this.elementIndex
             });
         },
 
@@ -274,6 +262,7 @@ Craft.TableElementIndexView = Craft.BaseElementIndexView.extend(
                             }
 
                             $spinnerRow.replaceWith($newElements);
+                            this.thumbLoader.load($newElements);
 
                             if (this.elementIndex.actions || this.settings.selectable) {
                                 this.elementSelect.addItems($newElements.filter(':not(.disabled)'));
@@ -294,7 +283,6 @@ Craft.TableElementIndexView = Craft.BaseElementIndexView.extend(
                             // Is there room to load more right now?
                             this.maybeLoadMore();
                         }
-
                     }, this));
                 }
             }

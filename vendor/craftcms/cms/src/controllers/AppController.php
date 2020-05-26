@@ -8,17 +8,16 @@
 namespace craft\controllers;
 
 use Craft;
-use craft\base\Plugin;
 use craft\base\UtilityInterface;
 use craft\enums\LicenseKeyStatus;
-use craft\errors\MigrationException;
-use craft\helpers\App;
+use craft\errors\InvalidPluginException;
+use craft\helpers\Api;
+use craft\helpers\ArrayHelper;
 use craft\helpers\Cp;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\UrlHelper;
 use craft\models\Update;
-use craft\models\UpgradeInfo;
-use craft\models\UpgradePurchase;
+use craft\models\Updates;
 use craft\web\Controller;
 use craft\web\ServiceUnavailableHttpException;
 use Http\Client\Common\Exception\ServerErrorException;
@@ -33,23 +32,21 @@ use yii\web\ServerErrorHttpException;
  * Note that all actions in the controller require an authenticated Craft session via [[allowAnonymous]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
+ * @internal
  */
 class AppController extends Controller
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     public $allowAnonymous = [
-        'migrate'
+        'migrate' => self::ALLOW_ANONYMOUS_LIVE | self::ALLOW_ANONYMOUS_OFFLINE,
     ];
 
-    // Public Methods
-    // =========================================================================
-
+    /**
+     * @inheritdoc
+     */
     public function beforeAction($action)
     {
         if ($action->id === 'migrate') {
@@ -57,6 +54,34 @@ class AppController extends Controller
         }
 
         return parent::beforeAction($action);
+    }
+
+    /**
+     * Returns the latest Craftnet API headers.
+     *
+     * @return Response
+     * @throws BadRequestHttpException
+     * @since 3.3.16
+     */
+    public function actionApiHeaders(): Response
+    {
+        $this->requireCpRequest();
+        return $this->asJson(Api::headers());
+    }
+
+    /**
+     * Processes an API response’s headers.
+     *
+     * @return Response
+     * @throws BadRequestHttpException
+     * @since 3.3.16
+     */
+    public function actionProcessApiResponseHeaders()
+    {
+        $this->requireCpRequest();
+        $headers = Craft::$app->getRequest()->getRequiredBodyParam('headers');
+        Api::processResponseHeaders($headers);
+        return $this->asJson(1);
     }
 
     /**
@@ -71,19 +96,62 @@ class AppController extends Controller
         $this->requireAcceptsJson();
 
         // Require either the 'performUpdates' or 'utility:updates' permission
-        $user = Craft::$app->getUser();
-        if (!$user->checkPermission('performUpdates') && !$user->checkPermission('utility:updates')) {
+        $userSession = Craft::$app->getUser();
+        if (!$userSession->checkPermission('performUpdates') && !$userSession->checkPermission('utility:updates')) {
             throw new ForbiddenHttpException('User is not permitted to perform this action');
         }
 
         $request = Craft::$app->getRequest();
+        $updatesService = Craft::$app->getUpdates();
+
+        if ($request->getParam('onlyIfCached') && !$updatesService->getIsUpdateInfoCached()) {
+            return $this->asJson(['cached' => false]);
+        }
+
         $forceRefresh = (bool)$request->getParam('forceRefresh');
         $includeDetails = (bool)$request->getParam('includeDetails');
 
-        $updates = Craft::$app->getUpdates()->getUpdates($forceRefresh);
+        $updates = $updatesService->getUpdates($forceRefresh);
+        return $this->_updatesResponse($updates, $includeDetails);
+    }
 
+    /**
+     * Caches new update info and then returns it.
+     *
+     * @return Response
+     * @throws ForbiddenHttpException
+     * @since 3.3.16
+     */
+    public function actionCacheUpdates(): Response
+    {
+        $this->requireAcceptsJson();
+
+        // Require either the 'performUpdates' or 'utility:updates' permission
+        $userSession = Craft::$app->getUser();
+        if (!$userSession->checkPermission('performUpdates') && !$userSession->checkPermission('utility:updates')) {
+            throw new ForbiddenHttpException('User is not permitted to perform this action');
+        }
+
+        $request = Craft::$app->getRequest();
+        $updateData = $request->getBodyParam('updates');
+        $updatesService = Craft::$app->getUpdates();
+        $updates = $updatesService->cacheUpdates($updateData);
+        $includeDetails = (bool)$request->getParam('includeDetails');
+        return $this->_updatesResponse($updates, $includeDetails);
+    }
+
+    /**
+     * Returns updates info as JSON
+     *
+     * @param Updates $updates The updates model
+     * @param bool $includeDetails Whether to include update details
+     * @return Response
+     */
+    private function _updatesResponse(Updates $updates, bool $includeDetails): Response
+    {
         $allowUpdates = (
             Craft::$app->getConfig()->getGeneral()->allowUpdates &&
+            Craft::$app->getConfig()->getGeneral()->allowAdminChanges &&
             Craft::$app->getUser()->checkPermission('performUpdates')
         );
 
@@ -100,11 +168,13 @@ class AppController extends Controller
             ];
 
             $pluginsService = Craft::$app->getPlugins();
-            foreach ($updates->plugins as $handle => $update) {
-                if (($plugin = $pluginsService->getPlugin($handle)) !== null) {
-                    /** @var Plugin $plugin */
-                    $res['updates']['plugins'][] = $this->_transformUpdate($allowUpdates, $update, $handle, $plugin->name);
+            foreach ($updates->plugins as $pluginHandle => $pluginUpdate) {
+                try {
+                    $pluginInfo = $pluginsService->getPluginInfo($pluginHandle);
+                } catch (InvalidPluginException $e) {
+                    continue;
                 }
+                $res['updates']['plugins'][] = $this->_transformUpdate($allowUpdates, $pluginUpdate, $pluginHandle, $pluginInfo['name']);
             }
         }
 
@@ -112,24 +182,30 @@ class AppController extends Controller
     }
 
     /**
-     * Creates a DB backup (if configured to do so) and runs any pending Craft, plugin, & content migrations in one go.
-     * This action can be used as a post-deploy webhook with site deployment services (like [DeployBot](https://deploybot.com/))
-     * to minimize site downtime after a deployment.
+     * Creates a DB backup (if configured to do so), runs any pending Craft,
+     * plugin, & content migrations, and syncs `project.yaml` changes in one go.
+     *
+     * This action can be used as a post-deploy webhook with site deployment
+     * services (like [DeployBot](https://deploybot.com/) or [DeployPlace](https://deployplace.com/)) to minimize site
+     * downtime after a deployment.
      *
      * @throws ServerErrorException if something went wrong
      */
     public function actionMigrate()
     {
         $this->requirePostRequest();
-        $this->enableCsrfValidation = false;
 
         $updatesService = Craft::$app->getUpdates();
         $db = Craft::$app->getDb();
 
         // Get the handles in need of an update
         $handles = $updatesService->getPendingMigrationHandles(true);
+        $runMigrations = !empty($handles);
 
-        if (empty($handles)) {
+        $projectConfigService = Craft::$app->getProjectConfig();
+        $applyProjectConfigChanges = $projectConfigService->areChangesPending();
+
+        if (!$runMigrations && !$applyProjectConfigChanges) {
             // That was easy
             return Craft::$app->getResponse();
         }
@@ -153,13 +229,28 @@ class AppController extends Controller
             }
         }
 
-        // Run the migrations
+        $transaction = $db->beginTransaction();
+
         try {
-            $updatesService->runMigrations($handles);
-        } catch (MigrationException $e) {
+            // Run the migrations?
+            if ($runMigrations) {
+                $updatesService->runMigrations($handles);
+            }
+
+            // Sync project.yaml?
+            if ($applyProjectConfigChanges) {
+                $projectConfigService->applyYamlChanges();
+            }
+
+            $transaction->commit();
+        } catch (\Throwable $e) {
+            $transaction->rollBack();
+
+            // MySQL may have implicitly committed the transaction
+            $restored = $db->getIsPgsql();
+
             // Do we have a backup?
-            $restored = false;
-            if (!empty($backupPath)) {
+            if (!$restored && !empty($backupPath)) {
                 // Attempt a restore
                 try {
                     $db->restore($backupPath);
@@ -174,7 +265,7 @@ class AppController extends Controller
             if ($restored) {
                 $error .= ' The database has been restored to its previous state.';
             } else if (isset($restoreException)) {
-                $error .= ' The database could not be restored due to a separate error: '.$restoreException->getMessage();
+                $error .= ' The database could not be restored due to a separate error: ' . $restoreException->getMessage();
             } else {
                 $error .= ' The database has not been restored.';
             }
@@ -210,7 +301,7 @@ class AppController extends Controller
     }
 
     /**
-     * Loads any CP alerts.
+     * Returns any alerts that should be displayed in the control panel.
      *
      * @return Response
      */
@@ -228,7 +319,7 @@ class AppController extends Controller
     }
 
     /**
-     * Shuns a CP alert for 24 hours.
+     * Shuns a control panel alert for 24 hours.
      *
      * @return Response
      */
@@ -249,182 +340,7 @@ class AppController extends Controller
             ]);
         }
 
-        return $this->asErrorJson(Craft::t('app', 'An unknown error occurred.'));
-    }
-
-    /**
-     * Transfers the Craft license to the current domain.
-     *
-     * @return Response
-     */
-    public function actionTransferLicenseToCurrentDomain(): Response
-    {
-        $this->requireAcceptsJson();
-        $this->requirePostRequest();
-        $this->requireAdmin();
-
-        $response = Craft::$app->getEt()->transferLicenseToCurrentDomain();
-
-        if ($response === true) {
-            return $this->asJson([
-                'success' => true
-            ]);
-        }
-
-        return $this->asErrorJson($response);
-    }
-
-    /**
-     * Returns the edition upgrade modal.
-     *
-     * @return Response
-     */
-    public function actionGetUpgradeModal(): Response
-    {
-        $this->requireAcceptsJson();
-
-        // Make it so Craft Client accounts can perform the upgrade.
-        if (Craft::$app->getEdition() === Craft::Pro) {
-            $this->requireAdmin();
-        }
-
-        $etResponse = Craft::$app->getEt()->fetchUpgradeInfo();
-
-        if (!$etResponse) {
-            return $this->asErrorJson(Craft::t('app', 'Craft is unable to fetch edition info at this time.'));
-        }
-
-        // Make sure we've got a valid license key (mismatched domain is OK for these purposes)
-        if ($etResponse->licenseKeyStatus === LicenseKeyStatus::Invalid) {
-            return $this->asErrorJson(Craft::t('app', 'Your license key is invalid.'));
-        }
-
-        // Make sure they've got a valid licensed edition, just to be safe
-        if (!App::isValidEdition($etResponse->licensedEdition)) {
-            return $this->asErrorJson(Craft::t('app', 'Your license has an invalid Craft edition associated with it.'));
-        }
-
-        $editions = [];
-        $formatter = Craft::$app->getFormatter();
-
-        /** @var UpgradeInfo $upgradeInfo */
-        $upgradeInfo = $etResponse->data;
-
-        foreach ($upgradeInfo->editions as $edition => $info) {
-            $editions[$edition]['price'] = $info['price'];
-            $editions[$edition]['formattedPrice'] = $formatter->asCurrency($info['price'], 'USD', [], [], true);
-
-            if (isset($info['salePrice']) && $info['salePrice'] < $info['price']) {
-                $editions[$edition]['salePrice'] = $info['salePrice'];
-                $editions[$edition]['formattedSalePrice'] = $formatter->asCurrency($info['salePrice'], 'USD', [], [], true);
-            } else {
-                $editions[$edition]['salePrice'] = null;
-            }
-        }
-
-        $canTestEditions = Craft::$app->getCanTestEditions();
-
-        $modalHtml = $this->getView()->renderTemplate('_upgrademodal', [
-            'editions' => $editions,
-            'licensedEdition' => $etResponse->licensedEdition,
-            'canTestEditions' => $canTestEditions
-        ]);
-
-        return $this->asJson([
-            'success' => true,
-            'editions' => $editions,
-            'licensedEdition' => $etResponse->licensedEdition,
-            'canTestEditions' => $canTestEditions,
-            'modalHtml' => $modalHtml,
-            'stripePublicKey' => $upgradeInfo->stripePublicKey,
-            'countries' => $upgradeInfo->countries,
-            'states' => $upgradeInfo->states,
-        ]);
-    }
-
-    /**
-     * Returns the price of an upgrade with a coupon applied to it.
-     *
-     * @return Response
-     */
-    public function actionGetCouponPrice(): Response
-    {
-        $this->requirePostRequest();
-        $this->requireAcceptsJson();
-
-        // Make it so Craft Client accounts can perform the upgrade.
-        if (Craft::$app->getEdition() === Craft::Pro) {
-            $this->requireAdmin();
-        }
-
-        $request = Craft::$app->getRequest();
-        $edition = $request->getRequiredBodyParam('edition');
-        $couponCode = $request->getRequiredBodyParam('couponCode');
-
-        $etResponse = Craft::$app->getEt()->fetchCouponPrice($edition, $couponCode);
-
-        if (!empty($etResponse->data['success'])) {
-            $couponPrice = $etResponse->data['couponPrice'];
-            $formattedCouponPrice = Craft::$app->getFormatter()->asCurrency($couponPrice, 'USD', [], [], true);
-
-            return $this->asJson([
-                'success' => true,
-                'couponPrice' => $couponPrice,
-                'formattedCouponPrice' => $formattedCouponPrice
-            ]);
-        }
-
-        return $this->asJson([
-            'success' => false
-        ]);
-    }
-
-    /**
-     * Passes along a given CC token to Elliott to purchase a Craft edition.
-     *
-     * @return Response
-     */
-    public function actionPurchaseUpgrade(): Response
-    {
-        $this->requirePostRequest();
-        $this->requireAcceptsJson();
-
-        // Make it so Craft Client accounts can perform the upgrade.
-        if (Craft::$app->getEdition() === Craft::Pro) {
-            $this->requireAdmin();
-        }
-
-        $request = Craft::$app->getRequest();
-        $model = new UpgradePurchase([
-            'ccTokenId' => $request->getRequiredBodyParam('ccTokenId'),
-            'expMonth' => $request->getRequiredBodyParam('expMonth'),
-            'expYear' => $request->getRequiredBodyParam('expYear'),
-            'edition' => $request->getRequiredBodyParam('edition'),
-            'expectedPrice' => $request->getRequiredBodyParam('expectedPrice'),
-            'name' => $request->getRequiredBodyParam('name'),
-            'email' => $request->getRequiredBodyParam('email'),
-            'businessName' => $request->getBodyParam('businessName'),
-            'businessAddress1' => $request->getBodyParam('businessAddress1'),
-            'businessAddress2' => $request->getBodyParam('businessAddress2'),
-            'businessCity' => $request->getBodyParam('businessCity'),
-            'businessState' => $request->getBodyParam('businessState'),
-            'businessCountry' => $request->getBodyParam('businessCountry'),
-            'businessZip' => $request->getBodyParam('businessZip'),
-            'businessTaxId' => $request->getBodyParam('businessTaxId'),
-            'purchaseNotes' => $request->getBodyParam('purchaseNotes'),
-            'couponCode' => $request->getBodyParam('couponCode'),
-        ]);
-
-        if (Craft::$app->getEt()->purchaseUpgrade($model)) {
-            return $this->asJson([
-                'success' => true,
-                'edition' => $model->edition
-            ]);
-        }
-
-        return $this->asJson([
-            'errors' => $model->getErrors()
-        ]);
+        return $this->asErrorJson(Craft::t('app', 'A server error occurred.'));
     }
 
     /**
@@ -433,7 +349,7 @@ class AppController extends Controller
      * @return Response
      * @throws BadRequestHttpException if Craft isn’t allowed to test edition upgrades
      */
-    public function actionTestUpgrade(): Response
+    public function actionTryEdition(): Response
     {
         $this->requirePostRequest();
         $this->requireAcceptsJson();
@@ -444,6 +360,17 @@ class AppController extends Controller
 
         if ($licensedEdition === null) {
             $licensedEdition = 0;
+        }
+
+        switch ($edition) {
+            case 'solo':
+                $edition = Craft::Solo;
+                break;
+            case 'pro':
+                $edition = Craft::Pro;
+                break;
+            default:
+                throw new BadRequestHttpException('Invalid Craft edition: ' . $edition);
         }
 
         // If this is actually an upgrade, make sure that they are allowed to test edition upgrades
@@ -479,11 +406,46 @@ class AppController extends Controller
         return $this->asJson(['success' => $success]);
     }
 
-    // Private Methods
-    // =========================================================================
+    /**
+     * Fetches plugin license statuses.
+     *
+     * @return Response
+     */
+    public function actionGetPluginLicenseInfo(): Response
+    {
+        $this->requireAdmin();
+        $pluginLicenses = Craft::$app->getRequest()->getBodyParam('pluginLicenses');
+        $result = $this->_pluginLicenseInfo($pluginLicenses);
+        ArrayHelper::multisort($result, 'name');
+        return $this->asJson($result);
+    }
+
+    /**
+     * Updates a plugin's license key.
+     *
+     * @return Response
+     */
+    public function actionUpdatePluginLicense(): Response
+    {
+        $this->requirePostRequest();
+        $this->requireAcceptsJson();
+        $this->requireAdmin();
+
+        $request = Craft::$app->getRequest();
+        $handle = $request->getRequiredBodyParam('handle');
+        $newKey = $request->getRequiredBodyParam('key');
+
+        // Get the current key and set the new one
+        $pluginsService = Craft::$app->getPlugins();
+        $pluginsService->setPluginLicenseKey($handle, $newKey ?: null);
+
+        // Return the new plugin license info
+        return $this->asJson(1);
+    }
 
     /**
      * Transforms an update for inclusion in [[actionCheckForUpdates()]] response JSON.
+     *
      * Also sets an `allowed` key on the given update's releases, based on the `allowUpdates` config setting.
      *
      * @param bool $allowUpdates Whether updates are allowed
@@ -509,8 +471,8 @@ class AppController extends Controller
             $arr['ctaUrl'] = UrlHelper::url($update->renewalUrl);
         } else {
             if ($update->status === Update::STATUS_BREAKPOINT) {
-                $arr['statusText'] = Craft::t('app', '<strong>You’ve reached a breakpoint!</strong> More updates will become available after you install {update}.</p>', [
-                    'update' => $name.' '.($update->getLatest()->version ?? '')
+                $arr['statusText'] = Craft::t('app', '<strong>You’ve reached a breakpoint!</strong> More updates will become available after you install {update}.', [
+                    'update' => $name . ' ' . ($update->getLatest()->version ?? '')
                 ]);
             }
 
@@ -520,5 +482,89 @@ class AppController extends Controller
         }
 
         return $arr;
+    }
+
+    /**
+     * Returns plugin license info.
+     *
+     * @param array|null $pluginLicenses
+     * @return array
+     */
+    private function _pluginLicenseInfo(array $pluginLicenses = null): array
+    {
+        $result = [];
+
+        if ($pluginLicenses === null) {
+            // Update our records and get license info from the API
+            $licenseInfo = Craft::$app->getApi()->getLicenseInfo(['plugins']);
+            $pluginLicenses = $licenseInfo['pluginLicenses'] ?? [];
+        }
+
+        $pluginsService = Craft::$app->getPlugins();
+        $allPluginInfo = $pluginsService->getAllPluginInfo();
+
+        // Update our records & use all licensed plugins as a starting point
+        if (!empty($pluginLicenses)) {
+            $defaultIconUrl = Craft::$app->getAssetManager()->getPublishedUrl('@app/icons/default-plugin.svg', true);
+            $formatter = Craft::$app->getFormatter();
+            foreach ($pluginLicenses as $pluginLicenseInfo) {
+                if (isset($pluginLicenseInfo['plugin'])) {
+                    $pluginInfo = $pluginLicenseInfo['plugin'];
+                    $handle = $pluginInfo['handle'];
+
+                    // The same plugin could be associated with this Craft license more than once,
+                    // so make sure this is the same license they've entered a license key for, if there is one
+                    if (
+                        !isset($allPluginInfo[$handle]) ||
+                        !$allPluginInfo[$handle]['licenseKey'] ||
+                        $pluginsService->normalizePluginLicenseKey(Craft::parseEnv($allPluginInfo[$handle]['licenseKey'])) === $pluginLicenseInfo['key']
+                    ) {
+                        $result[$handle] = [
+                            'edition' => null,
+                            'isComposerInstalled' => false,
+                            'isInstalled' => false,
+                            'isEnabled' => false,
+                            'licenseKey' => $pluginLicenseInfo['key'],
+                            'licensedEdition' => $pluginLicenseInfo['edition'],
+                            'licenseKeyStatus' => LicenseKeyStatus::Valid,
+                            'licenseIssues' => [],
+                            'name' => $pluginInfo['name'],
+                            'description' => $pluginInfo['shortDescription'],
+                            'iconUrl' => $pluginInfo['icon']['url'] ?? $defaultIconUrl,
+                            'documentationUrl' => $pluginInfo['documentationUrl'] ?? null,
+                            'packageName' => $pluginInfo['packageName'],
+                            'latestVersion' => $pluginInfo['latestVersion'],
+                            'expired' => $pluginLicenseInfo['expired'],
+                        ];
+                        if ($pluginLicenseInfo['expired']) {
+                            $result[$handle]['renewalUrl'] = $pluginLicenseInfo['renewalUrl'];
+                            $result[$handle]['renewalText'] = Craft::t('app', 'Renew for {price}', [
+                                'price' => $formatter->asCurrency($pluginLicenseInfo['renewalPrice'], $pluginLicenseInfo['renewalCurrency'])
+                            ]);
+                        }
+                    }
+                }
+            }
+        }
+
+        // Override with info for the installed plugins
+        foreach ($allPluginInfo as $handle => $pluginInfo) {
+            $result[$handle] = array_merge($result[$handle] ?? [], [
+                'isComposerInstalled' => true,
+                'isInstalled' => $pluginInfo['isInstalled'],
+                'isEnabled' => $pluginInfo['isEnabled'],
+                'version' => $pluginInfo['version'],
+                'hasMultipleEditions' => $pluginInfo['hasMultipleEditions'],
+                'edition' => $pluginInfo['edition'],
+                'licenseKey' => $pluginsService->normalizePluginLicenseKey(Craft::parseEnv($pluginInfo['licenseKey'])),
+                'licensedEdition' => $pluginInfo['licensedEdition'],
+                'licenseKeyStatus' => $pluginInfo['licenseKeyStatus'],
+                'licenseIssues' => $pluginInfo['licenseIssues'],
+                'isTrial' => $pluginInfo['isTrial'],
+                'upgradeAvailable' => $pluginInfo['upgradeAvailable'],
+            ]);
+        }
+
+        return $result;
     }
 }

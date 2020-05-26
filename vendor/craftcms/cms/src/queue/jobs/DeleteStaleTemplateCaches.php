@@ -9,6 +9,7 @@ namespace craft\queue\jobs;
 
 use Craft;
 use craft\db\Query;
+use craft\db\Table;
 use craft\elements\db\ElementQuery;
 use craft\queue\BaseJob;
 
@@ -16,20 +17,14 @@ use craft\queue\BaseJob;
  * DeleteStaleTemplateCaches job
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class DeleteStaleTemplateCaches extends BaseJob
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|int[]|null The element ID(s) whose caches need to be cleared
      */
     public $elementId;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -52,9 +47,13 @@ class DeleteStaleTemplateCaches extends BaseJob
             $this->elementId = (array)$this->elementId;
         }
 
+        // Delete any expired template caches
+        $templateCachesService = Craft::$app->getTemplateCaches();
+        $templateCachesService->deleteExpiredCaches();
+
         $query = (new Query())
             ->select(['cacheId', 'query'])
-            ->from(['{{%templatecachequeries}}'])
+            ->from([Table::TEMPLATECACHEQUERIES])
             ->where(['type' => $elementType])
             ->orderBy(['id' => SORT_ASC]);
 
@@ -69,7 +68,11 @@ class DeleteStaleTemplateCaches extends BaseJob
         $deleteCacheIds = [];
 
         foreach ($query->each() as $row) {
-            $this->setProgress($queue, $currentRow++ / $totalRows);
+            $this->setProgress($queue, $currentRow / $totalRows, Craft::t('app', '{step} of {total}', [
+                'step' => $currentRow + 1,
+                'total' => $totalRows,
+            ]));
+            $currentRow++;
 
             // Do we already plan on deleting this cache?
             if (isset($deleteCacheIds[$row['cacheId']])) {
@@ -87,12 +90,9 @@ class DeleteStaleTemplateCaches extends BaseJob
 
         // Actually delete the caches now
         if (!empty($deleteCacheIds)) {
-            Craft::$app->getTemplateCaches()->deleteCacheById(array_keys($deleteCacheIds));
+            $templateCachesService->deleteCacheById(array_keys($deleteCacheIds));
         }
     }
-
-    // Protected Methods
-    // =========================================================================
 
     /**
      * @inheritdoc

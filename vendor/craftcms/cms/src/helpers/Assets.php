@@ -15,6 +15,7 @@ use craft\elements\Asset;
 use craft\enums\PeriodType;
 use craft\events\RegisterAssetFileKindsEvent;
 use craft\events\SetAssetFilenameEvent;
+use craft\models\AssetTransformIndex;
 use craft\models\VolumeFolder;
 use yii\base\Event;
 use yii\base\Exception;
@@ -23,13 +24,10 @@ use yii\base\Exception;
  * Class Assets
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Assets
 {
-    // Constants
-    // =========================================================================
-
     const INDEX_SKIP_ITEMS_PATTERN = '/.*(Thumbs\.db|__MACOSX|__MACOSX\/|__MACOSX\/.*|\.DS_STORE)$/i';
 
     /**
@@ -42,13 +40,17 @@ class Assets
      */
     const EVENT_REGISTER_FILE_KINDS = 'registerFileKinds';
 
-    // Properties
-    // =========================================================================
-
+    /**
+     * @var array Supported file kinds
+     * @see getFileKinds()
+     */
     private static $_fileKinds;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var array Allowed file kinds
+     * @see getAllowedFileKinds()
+     */
+    private static $_allowedFileKinds;
 
     /**
      * Get a temporary file path.
@@ -60,10 +62,11 @@ class Assets
     public static function tempFilePath(string $extension = 'tmp'): string
     {
         $extension = strpos($extension, '.') !== false ? pathinfo($extension, PATHINFO_EXTENSION) : $extension;
-        $filename = uniqid('assets', true).'.'.$extension;
-        $path = Craft::$app->getPath()->getTempPath().DIRECTORY_SEPARATOR.$filename;
+        $filename = uniqid('assets', true) . '.' . $extension;
+        $path = Craft::$app->getPath()->getTempPath() . DIRECTORY_SEPARATOR . $filename;
+
         if (($handle = fopen($path, 'wb')) === false) {
-            throw new Exception('Could not create temp file: '.$path);
+            throw new Exception('Could not create temp file: ' . $path);
         }
         fclose($handle);
 
@@ -74,17 +77,18 @@ class Assets
      * Generate a URL for a given Assets file in a Source Type.
      *
      * @param VolumeInterface $volume
-     * @param Asset $file
+     * @param Asset $asset
+     * @param string $uri Asset URI to use. Defaults to the filename.
+     * @param AssetTransformIndex|null $transformIndex Transform index, for which the URL is being generated, if any
      * @return string
      */
-    public static function generateUrl(VolumeInterface $volume, Asset $file): string
+    public static function generateUrl(VolumeInterface $volume, Asset $asset, string $uri = null, AssetTransformIndex $transformIndex = null): string
     {
         $baseUrl = $volume->getRootUrl();
-        $folderPath = $file->getFolder()->path;
-        $filename = $file->filename;
-        $appendix = static::urlAppendix($volume, $file);
+        $folderPath = $asset->getFolder()->path;
+        $appendix = static::urlAppendix($volume, $asset, $transformIndex);
 
-        return $baseUrl.$folderPath.$filename.$appendix;
+        return $baseUrl . $folderPath . ($uri ?? $asset->filename) . $appendix;
     }
 
     /**
@@ -92,15 +96,21 @@ class Assets
      *
      * @param VolumeInterface $volume
      * @param Asset $file
+     * @param AssetTransformIndex|null $transformIndex Transform index, for which the URL is being generated, if any
      * @return string
      */
-    public static function urlAppendix(VolumeInterface $volume, Asset $file): string
+    public static function urlAppendix(VolumeInterface $volume, Asset $file, AssetTransformIndex $transformIndex = null): string
     {
         $appendix = '';
 
         /** @var Volume $volume */
         if (!empty($volume->expires) && DateTimeHelper::isValidIntervalString($volume->expires) && $file->dateModified) {
-            $appendix = '?mtime='.$file->dateModified->format('YmdHis');
+            $focalAppendix = $file->getHasFocalPoint() ? urlencode($file->getFocalPoint(true)) : 'none';
+            $appendix = '?mtime=' . $file->dateModified->format('YmdHis') . '&focal=' . $focalAppendix;
+
+            if ($transformIndex) {
+                $appendix .= '&tmtime=' . $transformIndex->dateUpdated->format('YmdHis');
+            }
         }
 
         return $appendix;
@@ -119,7 +129,7 @@ class Assets
     {
         if ($isFilename) {
             $baseName = pathinfo($name, PATHINFO_FILENAME);
-            $extension = '.'.pathinfo($name, PATHINFO_EXTENSION);
+            $extension = '.' . pathinfo($name, PATHINFO_EXTENSION);
         } else {
             $baseName = $name;
             $extension = '';
@@ -132,24 +142,32 @@ class Assets
             $separator = null;
         }
 
-        if ($isFilename && !$preventPluginModifications) {
-            $event = new SetAssetFilenameEvent([
-                'filename' => $baseName
-            ]);
-            Event::trigger(self::class, self::EVENT_SET_FILENAME, $event);
-            $baseName = $event->filename;
-        }
-
-        $baseName = FileHelper::sanitizeFilename($baseName, [
+        $baseNameSanitized = FileHelper::sanitizeFilename($baseName, [
             'asciiOnly' => $generalConfig->convertFilenamesToAscii,
             'separator' => $separator
         ]);
+
+        // Give developers a chance to do their own sanitation
+        if ($isFilename && !$preventPluginModifications) {
+            $event = new SetAssetFilenameEvent([
+                'filename' => $baseNameSanitized,
+                'originalFilename' => $baseName,
+                'extension' => $extension
+            ]);
+            Event::trigger(self::class, self::EVENT_SET_FILENAME, $event);
+            $baseName = $event->filename;
+            $extension = $event->extension;
+        }
 
         if ($isFilename && empty($baseName)) {
             $baseName = '-';
         }
 
-        return $baseName.$extension;
+        if (!$isFilename) {
+            $baseName = $baseNameSanitized;
+        }
+
+        return $baseName . $extension;
     }
 
     /**
@@ -160,9 +178,7 @@ class Assets
      */
     public static function filename2Title(string $filename): string
     {
-        $filename = StringHelper::toLowerCase($filename);
-        $filename = str_replace(['.', '_', '-'], ' ', $filename);
-        return StringHelper::toTitleCase($filename);
+        return StringHelper::upperCaseFirst(implode(' ', StringHelper::toWords($filename, false, true)));
     }
 
     /**
@@ -191,7 +207,7 @@ class Assets
                 $folder = new VolumeFolder();
                 $folder->name = $sourceFolder->name;
                 $folder->volumeId = $destinationFolder->volumeId;
-                $folder->path = ltrim(rtrim($destinationFolder->path, '/').'/'.$relativePath, '/');
+                $folder->path = ltrim(rtrim($destinationFolder->path, '/') . '/' . $relativePath, '/');
 
                 // Any and all parent folders should be already mirrored
                 $folder->parentId = ($folderIdChanges[$sourceFolder->parentId] ?? $destinationFolder->id);
@@ -273,8 +289,34 @@ class Assets
     public static function getFileKinds(): array
     {
         self::_buildFileKinds();
-
         return self::$_fileKinds;
+    }
+
+    /**
+     * Returns a list of file kinds that are allowed to be uploaded.
+     *
+     * @return array The allowed file kinds
+     * @since 3.1.16
+     */
+    public static function getAllowedFileKinds(): array
+    {
+        if (self::$_allowedFileKinds !== null) {
+            return self::$_allowedFileKinds;
+        }
+
+        self::$_allowedFileKinds = [];
+        $allowedExtensions = array_flip(Craft::$app->getConfig()->getGeneral()->allowedFileExtensions);
+
+        foreach (static::getFileKinds() as $kind => $info) {
+            foreach ($info['extensions'] as $extension) {
+                if (isset($allowedExtensions[$extension])) {
+                    self::$_allowedFileKinds[$kind] = $info;
+                    continue 2;
+                }
+            }
+        }
+
+        return self::$_allowedFileKinds;
     }
 
     /**
@@ -320,16 +362,13 @@ class Assets
     public static function parseFileLocation($location)
     {
         if (!preg_match('/^\{folder:(\d+)\}(.+)$/', $location, $matches)) {
-            throw new Exception('Invalid file location format: '.$location);
+            throw new Exception('Invalid file location format: ' . $location);
         }
 
         list(, $folderId, $filename) = $matches;
 
         return [$folderId, $filename];
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Builds the internal file kinds array, if it hasn't been built already.
@@ -552,6 +591,9 @@ class Assets
                 ],
             ];
 
+            // Merge with the extraFileKinds setting
+            static::$_fileKinds = ArrayHelper::merge(static::$_fileKinds, Craft::$app->getConfig()->getGeneral()->extraFileKinds);
+
             // Allow plugins to modify file kinds
             $event = new RegisterAssetFileKindsEvent([
                 'fileKinds' => self::$_fileKinds,
@@ -559,6 +601,9 @@ class Assets
 
             Event::trigger(self::class, self::EVENT_REGISTER_FILE_KINDS, $event);
             self::$_fileKinds = $event->fileKinds;
+
+            // Sort by label
+            ArrayHelper::multisort(static::$_fileKinds, 'label');
         }
     }
 
@@ -582,9 +627,9 @@ class Assets
         $volume = $asset->getVolume();
 
         $imagePath = Craft::$app->getPath()->getImageEditorSourcesPath();
-        $assetSourcesDirectory = $imagePath.'/'.$assetId;
-        $targetSizedPath = $assetSourcesDirectory.'/'.$size;
-        $targetFilePath = $targetSizedPath.'/'.$assetId.'.'.$asset->getExtension();
+        $assetSourcesDirectory = $imagePath . '/' . $assetId;
+        $targetSizedPath = $assetSourcesDirectory . '/' . $size;
+        $targetFilePath = $targetSizedPath . '/' . $assetId . '.' . $asset->getExtension();
         FileHelper::createDirectory($targetSizedPath);
 
         // You never know.
@@ -605,7 +650,7 @@ class Assets
                     continue;
                 }
                 $existingSize = $subDir;
-                $existingAsset = $assetSourcesDirectory.DIRECTORY_SEPARATOR.$subDir.'/'.$assetId.'.'.$asset->getExtension();
+                $existingAsset = $assetSourcesDirectory . DIRECTORY_SEPARATOR . $subDir . '/' . $assetId . '.' . $asset->getExtension();
                 if ($existingSize >= $size && is_file($existingAsset)) {
                     Craft::$app->getImages()->loadImage($existingAsset)
                         ->scaleToFit($size, $size, false)
@@ -634,5 +679,31 @@ class Assets
         }
 
         return $targetFilePath;
+    }
+
+    /**
+     * Returns the maximum allowed upload size in bytes per all config settings combined.
+     *
+     * @return int|float
+     */
+    public static function getMaxUploadSize()
+    {
+        $maxUpload = ConfigHelper::sizeInBytes(ini_get('upload_max_filesize'));
+        $maxPost = ConfigHelper::sizeInBytes(ini_get('post_max_size'));
+        $memoryLimit = ConfigHelper::sizeInBytes(ini_get('memory_limit'));
+
+        $uploadInBytes = min($maxUpload, $maxPost);
+
+        if ($memoryLimit > 0) {
+            $uploadInBytes = min($uploadInBytes, $memoryLimit);
+        }
+
+        $configLimit = Craft::$app->getConfig()->getGeneral()->maxUploadFileSize;
+
+        if ($configLimit) {
+            $uploadInBytes = min($uploadInBytes, $configLimit);
+        }
+
+        return $uploadInBytes;
     }
 }

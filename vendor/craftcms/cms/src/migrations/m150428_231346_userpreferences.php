@@ -4,38 +4,30 @@ namespace craft\migrations;
 
 use craft\db\Migration;
 use craft\db\Query;
+use craft\db\Table;
 use craft\helpers\Json;
+use craft\helpers\Localization;
 use craft\helpers\MigrationHelper;
+use yii\base\InvalidArgumentException;
 
 /**
  * m150428_231346_userpreferences migration.
  */
 class m150428_231346_userpreferences extends Migration
 {
-    // Properties
-    // =========================================================================
-
     private $_usersTable;
     private $_prefsTable;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
      */
     public function safeUp()
     {
-        $this->_usersTable = $this->db->getSchema()->getRawTableName('{{%users}}');
-        $this->_prefsTable = $this->db->getSchema()->getRawTableName('{{%userpreferences}}');
+        $this->_usersTable = $this->db->getSchema()->getRawTableName(Table::USERS);
+        $this->_prefsTable = $this->db->getSchema()->getRawTableName(Table::USERPREFERENCES);
 
-        if ($this->db->tableExists($this->_prefsTable)) {
-            $this->truncateTable($this->_prefsTable);
-            $this->dropForeignKey($this->db->getForeignKeyName($this->_prefsTable, ['userId']), $this->_prefsTable);
-            $this->_createUserPrefsIndexAndForeignKey();
-
-            return;
-        }
+        // In case this was run in a previous update attempt
+        $this->dropTableIfExists($this->_prefsTable);
 
         $this->_createUserPrefsTable();
         $this->_createUserPrefsIndexAndForeignKey();
@@ -55,9 +47,6 @@ class m150428_231346_userpreferences extends Migration
 
         return false;
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Creates the userpreferences table
@@ -117,7 +106,11 @@ class m150428_231346_userpreferences extends Migration
                 $prefs = [];
 
                 if (!empty($user['preferredLocale'])) {
-                    $prefs['language'] = $user['preferredLocale'];
+                    try {
+                        $prefs['language'] = Localization::normalizeLanguage($user['preferredLocale']);
+                    } catch (InvalidArgumentException $e) {
+                        // Do nothing.
+                    }
                 }
 
                 if ($user['weekStartDay'] != 0) {

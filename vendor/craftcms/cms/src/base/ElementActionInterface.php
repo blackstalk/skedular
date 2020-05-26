@@ -13,13 +13,10 @@ use craft\elements\db\ElementQueryInterface;
  * ElementActionInterface defines the common interface to be implemented by element action classes.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 interface ElementActionInterface extends SavableComponentInterface
 {
-    // Static
-    // =========================================================================
-
     /**
      * Returns whether this action is destructive in nature.
      *
@@ -27,8 +24,12 @@ interface ElementActionInterface extends SavableComponentInterface
      */
     public static function isDestructive(): bool;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * Sets the element type on the action.
+     *
+     * @param string $elementType
+     */
+    public function setElementType(string $elementType);
 
     /**
      * Returns the action’s trigger label.

@@ -5,6 +5,7 @@
  */
 Craft.BaseElementSelectInput = Garnish.Base.extend(
     {
+        thumbLoader: null,
         elementSelect: null,
         elementSort: null,
         modal: null,
@@ -65,6 +66,8 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
                     .css('top', 0)
                     .css(Craft.left, 0);
             }
+
+            this.thumbLoader = new Craft.ElementThumbLoader();
 
             this.initElementSelect();
             this.initElementSort();
@@ -189,6 +192,8 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
         },
 
         addElements: function($elements) {
+            this.thumbLoader.load($elements);
+
             if (this.settings.selectable) {
                 this.elementSelect.addItems($elements);
             }
@@ -212,16 +217,22 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
                 }
             }
 
-            $elements.find('.delete').on('click', $.proxy(function(ev) {
+            $elements.find('.delete').on('click dblclick', $.proxy(function(ev) {
                 this.removeElement($(ev.currentTarget).closest('.element'));
+                // Prevent this from acting as one of a double-click
+                ev.stopPropagation();
             }, this));
 
             this.$elements = this.$elements.add($elements);
             this.updateAddElementsBtn();
         },
 
-        createElementEditor: function($element) {
-            return Craft.createElementEditor(this.settings.elementType, $element);
+        createElementEditor: function($element, settings) {
+            if (!settings) {
+                settings = {};
+            }
+            settings.prevalidate = this.settings.prevalidate;
+            return Craft.createElementEditor(this.settings.elementType, $element, settings);
         },
 
         removeElements: function($elements) {
@@ -324,6 +335,10 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
                 ids.push(this.settings.sourceElementId);
             }
 
+            if (this.settings.disabledElementIds) {
+                ids.push(...this.settings.disabledElementIds);
+            }
+
             return ids;
         },
 
@@ -342,13 +357,16 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
         },
 
         selectElements: function(elements) {
-            for (var i = 0; i < elements.length; i++) {
-                var elementInfo = elements[i],
+            for (let i = 0; i < elements.length; i++) {
+                let elementInfo = elements[i],
                     $element = this.createNewElement(elementInfo);
 
                 this.appendElement($element);
                 this.addElements($element);
                 this.animateElementIntoPlace(elementInfo.$element, $element);
+
+                // Override the element reference with the new one
+                elementInfo.$element = $element;
             }
 
             this.onSelectElements(elements);
@@ -414,6 +432,10 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
         onSelectElements: function(elements) {
             this.trigger('selectElements', {elements: elements});
             this.settings.onSelectElements(elements);
+
+            if (window.draftEditor) {
+                window.draftEditor.checkForm();
+            }
         },
 
         onRemoveElements: function() {
@@ -433,6 +455,7 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
             sources: null,
             criteria: {},
             sourceElementId: null,
+            disabledElementIds: null,
             viewMode: 'list',
             limit: null,
             showSiteMenu: false,
@@ -443,6 +466,7 @@ Craft.BaseElementSelectInput = Garnish.Base.extend(
             sortable: true,
             selectable: true,
             editable: true,
+            prevalidate: false,
             editorSettings: {}
         }
     });

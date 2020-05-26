@@ -58,6 +58,10 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
      */
     public function __construct($value, $type = null, $dimension = 1)
     {
+        if ($value instanceof self) {
+            $value = $value->getValue();
+        }
+
         $this->value = $value;
         $this->type = $type;
         $this->dimension = $dimension;
@@ -93,7 +97,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Whether a offset exists
      *
-     * @link http://php.net/manual/en/arrayaccess.offsetexists.php
+     * @link https://secure.php.net/manual/en/arrayaccess.offsetexists.php
      * @param mixed $offset <p>
      * An offset to check for.
      * </p>
@@ -111,7 +115,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Offset to retrieve
      *
-     * @link http://php.net/manual/en/arrayaccess.offsetget.php
+     * @link https://secure.php.net/manual/en/arrayaccess.offsetget.php
      * @param mixed $offset <p>
      * The offset to retrieve.
      * </p>
@@ -126,7 +130,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Offset to set
      *
-     * @link http://php.net/manual/en/arrayaccess.offsetset.php
+     * @link https://secure.php.net/manual/en/arrayaccess.offsetset.php
      * @param mixed $offset <p>
      * The offset to assign the value to.
      * </p>
@@ -144,7 +148,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Offset to unset
      *
-     * @link http://php.net/manual/en/arrayaccess.offsetunset.php
+     * @link https://secure.php.net/manual/en/arrayaccess.offsetunset.php
      * @param mixed $offset <p>
      * The offset to unset.
      * </p>
@@ -159,7 +163,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Count elements of an object
      *
-     * @link http://php.net/manual/en/countable.count.php
+     * @link https://secure.php.net/manual/en/countable.count.php
      * @return int The custom count as an integer.
      * </p>
      * <p>
@@ -174,7 +178,7 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
     /**
      * Retrieve an external iterator
      *
-     * @link http://php.net/manual/en/iteratoraggregate.getiterator.php
+     * @link https://secure.php.net/manual/en/iteratoraggregate.getiterator.php
      * @return Traversable An instance of an object implementing <b>Iterator</b> or
      * <b>Traversable</b>
      * @since 2.0.14.1
@@ -182,10 +186,14 @@ class ArrayExpression implements ExpressionInterface, \ArrayAccess, \Countable, 
      */
     public function getIterator()
     {
-        if ($this->getValue() instanceof QueryInterface) {
+        $value = $this->getValue();
+        if ($value instanceof QueryInterface) {
             throw new InvalidConfigException('The ArrayExpression class can not be iterated when the value is a QueryInterface object');
         }
+        if ($value === null) {
+            $value = [];
+        }
 
-        return new \ArrayIterator($this->getValue());
+        return new \ArrayIterator($value);
     }
 }

@@ -29,8 +29,8 @@ class JsonFeedV1Serializer extends ArraySerializer
     {
         return array_merge([
             'version' => 'https://jsonfeed.org/version/1',
-            'title' => \Craft::$app->getSites()->currentSite->name,
-            'home_page_url' => UrlHelper::baseUrl(),
+            'title' => \Craft::$app->getSites()->getCurrentSite()->name,
+            'home_page_url' => UrlHelper::baseSiteUrl(),
             'feed_url' => UrlHelper::url(Craft::$app->getRequest()->getPathInfo()),
         ], $meta);
     }

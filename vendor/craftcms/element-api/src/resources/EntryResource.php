@@ -19,7 +19,9 @@ use yii\base\Exception;
  * draft or version.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since  2.0
+ * @since 2.0
+ * @deprecated in 2.6.0. With Craft 3.2+, `draftId` and `revisionId` params can be added as normal entry criteria
+ * params, combined with `'drafts' => true`.
  */
 class EntryResource extends ElementResource
 {

@@ -21,7 +21,7 @@ class DashboardAsset extends AssetBundle
      */
     public function init()
     {
-        $this->sourcePath = __DIR__.'/dist';
+        $this->sourcePath = __DIR__ . '/dist';
 
         $this->depends = [
             CpAsset::class,
@@ -32,7 +32,7 @@ class DashboardAsset extends AssetBundle
         ];
 
         $this->js = [
-            'Dashboard'.$this->dotJs(),
+            'Dashboard' . $this->dotJs(),
         ];
 
         parent::init();
@@ -47,8 +47,7 @@ class DashboardAsset extends AssetBundle
 
         if ($view instanceof View) {
             $view->registerTranslations('app', [
-                '1 column',
-                '{num} columns',
+                '{num, number} {num, plural, =1{column} other{columns}}',
                 '{type} Settings',
                 'Widget saved.',
                 'Couldn’t save widget.',

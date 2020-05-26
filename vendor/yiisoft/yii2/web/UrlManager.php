@@ -11,6 +11,7 @@ use Yii;
 use yii\base\Component;
 use yii\base\InvalidConfigException;
 use yii\caching\CacheInterface;
+use yii\di\Instance;
 use yii\helpers\Url;
 
 /**
@@ -89,7 +90,7 @@ class UrlManager extends Component
      * [
      *     'dashboard' => 'site/index',
      *
-     *     'POST <controller:[\w-]+>s' => '<controller>/create',
+     *     'POST <controller:[\w-]+>' => '<controller>/create',
      *     '<controller:[\w-]+>s' => '<controller>/index',
      *
      *     'PUT <controller:[\w-]+>/<id:\d+>'    => '<controller>/update',
@@ -118,12 +119,14 @@ class UrlManager extends Component
      */
     public $routeParam = 'r';
     /**
-     * @var CacheInterface|string the cache object or the application component ID of the cache object.
+     * @var CacheInterface|array|string the cache object or the application component ID of the cache object.
+     * This can also be an array that is used to create a [[CacheInterface]] instance in case you do not want to use
+     * an application component.
      * Compiled URL rules will be cached through this cache object, if it is available.
      *
      * After the UrlManager object is created, if you want to change this property,
      * you should only assign it with a cache object.
-     * Set this property to `false` if you do not want to cache the URL rules.
+     * Set this property to `false` or `null` if you do not want to cache the URL rules.
      *
      * Cache entries are stored for the time set by [[\yii\caching\Cache::$defaultDuration|$defaultDuration]] in
      * the cache configuration, which is unlimited by default. You may want to tune this value if your [[rules]]
@@ -182,8 +185,12 @@ class UrlManager extends Component
         if (!$this->enablePrettyUrl) {
             return;
         }
-        if (is_string($this->cache)) {
-            $this->cache = Yii::$app->get($this->cache, false);
+        if ($this->cache !== false && $this->cache !== null) {
+            try {
+                $this->cache = Instance::ensure($this->cache, 'yii\caching\CacheInterface');
+            } catch (InvalidConfigException $e) {
+                Yii::warning('Unable to use cache for URL manager: ' . $e->getMessage());
+            }
         }
         if (empty($this->rules)) {
             return;
@@ -437,7 +444,7 @@ class UrlManager extends Component
                     }
 
                     return $url . $baseUrl . $anchor;
-                } elseif (strpos($url, '//') === 0) {
+                } elseif (strncmp($url, '//', 2) === 0) {
                     if ($baseUrl !== '' && ($pos = strpos($url, '/', 2)) !== false) {
                         return substr($url, 0, $pos) . $baseUrl . substr($url, $pos) . $anchor;
                     }
@@ -546,7 +553,7 @@ class UrlManager extends Component
         $url = $this->createUrl($params);
         if (strpos($url, '://') === false) {
             $hostInfo = $this->getHostInfo();
-            if (strpos($url, '//') === 0) {
+            if (strncmp($url, '//', 2) === 0) {
                 $url = substr($hostInfo, 0, strpos($hostInfo, '://')) . ':' . $url;
             } else {
                 $url = $hostInfo . $url;

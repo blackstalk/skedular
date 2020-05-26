@@ -7,11 +7,10 @@
 
 namespace craft\services;
 
-use Composer\Repository\PlatformRepository;
 use Composer\Semver\VersionParser;
 use Craft;
-use craft\base\Plugin;
-use craft\errors\ApiException;
+use craft\helpers\Api as ApiHelper;
+use craft\helpers\ArrayHelper;
 use craft\helpers\Json;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\RequestException;
@@ -22,23 +21,18 @@ use yii\base\Exception;
 
 /**
  * The API service provides APIs for calling the Craft API (api.craftcms.com).
- * An instance of the API service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getApi()|<code>Craft::$app->api</code>]].
+ * An instance of the API service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getApi()|`Craft::$app->api`]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
+ * @internal
  */
 class Api extends Component
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var Client
      */
     public $client;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -49,109 +43,124 @@ class Api extends Component
 
         if ($this->client === null) {
             $this->client = Craft::createGuzzleClient([
-                'base_uri' => 'https://api.craftcms.com/v1/'
+                'base_uri' => Craft::$app->baseApiUrl,
             ]);
         }
+    }
+
+    /**
+     * Returns info about the current Craft license.
+     *
+     * @param string[] $include
+     * @return array
+     * @throws RequestException if the API gave a non-2xx response
+     */
+    public function getLicenseInfo(array $include = []): array
+    {
+        $response = $this->request('GET', 'cms-licenses', [
+            'query' => ['include' => implode(',', $include)],
+        ]);
+        $body = Json::decode((string)$response->getBody());
+        return $body['license'];
     }
 
     /**
      * Checks for Craft and plugin updates.
      *
      * @return array
-     * @throws ApiException if the API gave a non-2xx response
-     * @throws Exception if no one is logged in or there isn't a valid license key
+     * @throws RequestException if the API gave a non-2xx response
      */
     public function getUpdates(): array
     {
-        $request = Craft::$app->getRequest();
-        $user = Craft::$app->getUser()->getIdentity();
-
-        if (!$user) {
-            throw new Exception('A user must be logged in to check for updates.');
-        }
-
-        $requestBody = [
-            'request' => [
-                'hostname' => $request->getHostName(),
-                'port' => $request->getPort(),
-            ],
-            'user' => [
-                'email' => $user->email,
-            ],
-            'platform' => $this->platformVersions(),
-            'cms' => $this->getCmsInfo(),
-        ];
-
-        if ($ip = $request->getUserIP(FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
-            $requestBody['request']['ip'] = $ip;
-        }
-
-        if (!empty($pluginInfo = $this->pluginInfo())) {
-            $requestBody['plugins'] = $pluginInfo;
-        }
-
-        $response = $this->request('POST', 'updates', [
-            RequestOptions::BODY => Json::encode($requestBody),
-        ]);
-
+        $response = $this->request('GET', 'updates');
         return Json::decode((string)$response->getBody());
     }
 
     /**
-     * Returns optimized Composer requirements based on what’s currently installed,
-     * and the package requirements that should be installed.
+     * Returns all country data.
+     *
+     * @return array
+     * @throws RequestException if the API gave a non-2xx response
+     */
+    public function getCountries(): array
+    {
+        $cacheKey = 'countries';
+        $cache = Craft::$app->getCache();
+
+        if ($cache->exists($cacheKey)) {
+            return $cache->get($cacheKey);
+        }
+
+        $response = $this->request('GET', 'countries');
+        $countries = Json::decode((string)$response->getBody())['countries'];
+        $cache->set($cacheKey, $countries, 60 * 60 * 24 * 7);
+
+        return $countries;
+    }
+
+    /**
+     * Returns a list of package names that Composer should be allowed to update when installing/updating packages.
      *
      * @param array $install Package name/version pairs to be installed
      * @return array
-     * @throws ApiException if the API gave a non-2xx response
-     * @throws Exception if no one is logged in or there isn't a valid license key
+     * @throws RequestException if the API gave a non-2xx response
+     * @throws Exception if composer.json can't be located
+     * @since 3.0.19
      */
-    public function getOptimizedComposerRequirements(array $install): array
+    public function getComposerWhitelist(array $install): array
     {
         $composerService = Craft::$app->getComposer();
 
-        // Get the currently-installed packages, if there's a composer.lock
+        // If there's no composer.lock or we can't decode it, then we're done
+        $lockPath = $composerService->getLockPath();
+        if ($lockPath === null) {
+            return array_keys($install);
+        }
+        $lockData = Json::decode(file_get_contents($lockPath));
+        if (empty($lockData) || empty($lockData['packages'])) {
+            return array_keys($install);
+        }
+
         $installed = [];
-        if (($lockPath = $composerService->getLockPath()) !== null) {
-            $lockData = Json::decode(file_get_contents($lockPath));
-            if (!empty($lockData['packages'])) {
-                // Get the installed package versions
-                $hashes = [];
-                foreach ($lockData['packages'] as $package) {
-                    $installed[$package['name']] = $package['version'];
 
-                    // Should we be including the hash as well?
-                    if (strpos($package['version'], 'dev-') === 0) {
-                        $hashes[$package['name']] = $package['dist']['reference'] ?? $package['source']['reference'];
-                    }
-                }
+        // Get the installed package versions
+        $hashes = [];
+        foreach ($lockData['packages'] as $package) {
+            $installed[$package['name']] = $package['version'];
 
-                // Check for aliases
-                $aliases = [];
-                if (!empty($lockData['aliases'])) {
-                    $versionParser = new VersionParser();
-                    foreach ($lockData['aliases'] as $alias) {
-                        // Make sure the package is installed, we haven't already assigned an alias to this package,
-                        // and the alias is for the same version as what's installed
-                        if (
-                            !isset($aliases[$alias['package']]) &&
-                            isset($installed[$alias['package']]) &&
-                            $alias['version'] === $versionParser->normalize($installed[$alias['package']])
-                        ) {
-                            $aliases[$alias['package']] = $alias['alias'];
-                        }
-                    }
-                }
-
-                // Append the hashes and aliases
-                foreach ($hashes as $name => $hash) {
-                    $installed[$name] .= '#'.$hash;
-                }
-
-                foreach ($aliases as $name => $alias) {
-                    $installed[$name] .= ' as '.$alias;
+            // Should we be including the hash as well?
+            if (strpos($package['version'], 'dev-') === 0) {
+                $hash = $package['dist']['reference'] ?? $package['source']['reference'] ?? null;
+                if ($hash !== null) {
+                    $hashes[$package['name']] = $hash;
                 }
             }
+        }
+
+        // Check for aliases
+        $aliases = [];
+        if (!empty($lockData['aliases'])) {
+            $versionParser = new VersionParser();
+            foreach ($lockData['aliases'] as $alias) {
+                // Make sure the package is installed, we haven't already assigned an alias to this package,
+                // and the alias is for the same version as what's installed
+                if (
+                    !isset($aliases[$alias['package']]) &&
+                    isset($installed[$alias['package']]) &&
+                    $alias['version'] === $versionParser->normalize($installed[$alias['package']])
+                ) {
+                    $aliases[$alias['package']] = $alias['alias'];
+                }
+            }
+        }
+
+        // Append the hashes and aliases
+        foreach ($hashes as $name => $hash) {
+            $installed[$name] .= '#' . $hash;
+        }
+
+        foreach ($aliases as $name => $alias) {
+            $installed[$name] .= ' as ' . $alias;
         }
 
         $jsonPath = Craft::$app->getComposer()->getJsonPath();
@@ -163,17 +172,14 @@ class Api extends Component
 
         $requestBody = [
             'require' => $composerConfig['require'],
-            'platform' => $this->platformVersions(true),
+            'installed' => $installed,
+            'platform' => ApiHelper::platformVersions(true),
             'install' => $install,
             'minimum-stability' => $minStability,
             'prefer-stable' => (bool)($composerConfig['prefer-stable'] ?? false),
         ];
 
-        if (!empty($installed)) {
-            $requestBody['installed'] = $installed;
-        }
-
-        $response = $this->request('POST', 'optimize-composer-reqs', [
+        $response = $this->request('POST', 'composer-whitelist', [
             RequestOptions::BODY => Json::encode($requestBody),
         ]);
 
@@ -181,108 +187,34 @@ class Api extends Component
     }
 
     /**
-     * Returns info about the CMS.
-     *
-     * @return array
-     * @throws Exception if there isn't a valid license key
-     */
-    public function getCmsInfo(): array
-    {
-        return [
-            'version' => Craft::$app->getVersion(),
-            'edition' => strtolower(Craft::$app->getEditionName()),
-            'licenseKey' => $this->cmsLicenseKey(),
-        ];
-    }
-
-    // Protected Methods
-    // =========================================================================
-
-    /**
      * @param string $method
      * @param string $uri
      * @param array $options
      * @return ResponseInterface
-     * @throws ApiException
+     * @throws RequestException
      */
-    protected function request(string $method, string $uri, array $options = []): ResponseInterface
+    public function request(string $method, string $uri, array $options = []): ResponseInterface
     {
+        $options = ArrayHelper::merge($options, [
+            'headers' => ApiHelper::headers(),
+        ]);
+
+        $e = null;
+
         try {
-            return $this->client->request($method, $uri, $options);
+            $response = $this->client->request($method, $uri, $options);
         } catch (RequestException $e) {
-            throw new ApiException($e->getMessage(), $e->getCode(), $e);
-        }
-    }
-
-    /**
-     * Returns platform info.
-     *
-     * @param bool $useComposerOverrides Whether to factor in any `config.platform` overrides
-     * @return array
-     */
-    protected function platformVersions(bool $useComposerOverrides = false): array
-    {
-        $versions = [];
-
-        // Let Composer's PlatformRepository do most of the work
-        if ($useComposerOverrides) {
-            $jsonPath = Craft::$app->getComposer()->getJsonPath();
-            $config = Json::decode(file_get_contents($jsonPath));
-            $overrides = $config['config']['platform'] ?? [];
-        } else {
-            $overrides = [];
-        }
-        $repo = new PlatformRepository([], $overrides);
-        foreach ($repo->getPackages() as $package) {
-            $versions[$package->getName()] = $package->getPrettyVersion();
+            if (($response = $e->getResponse()) === null || $response->getStatusCode() === 500) {
+                throw $e;
+            }
         }
 
-        // Also include the DB driver/version
-        $db = Craft::$app->getDb();
-        $versions[$db->getDriverName()] = $db->getVersion();
+        ApiHelper::processResponseHeaders($response->getHeaders());
 
-        return $versions;
-    }
-
-    /**
-     * @return string
-     * @throws Exception
-     */
-    protected function cmsLicenseKey(): string
-    {
-        $path = Craft::$app->getPath()->getLicenseKeyPath();
-
-        // Check to see if the key exists and it's not a temp one.
-        if (!is_file($path)) {
-            throw new Exception("No license key found at {$path}.");
+        if ($e !== null) {
+            throw $e;
         }
 
-        $contents = file_get_contents($path);
-        if (empty($contents) || $contents === 'temp') {
-            throw new Exception("Invalid license key at {$path}.");
-        }
-
-        return trim(preg_replace('/[\r\n]+/', '', $contents));
-    }
-
-    /**
-     * @return array
-     */
-    protected function pluginInfo(): array
-    {
-        $info = [];
-        $pluginsService = Craft::$app->getPlugins();
-        /** @var Plugin[] $plugins */
-        $plugins = $pluginsService->getAllPlugins();
-
-        foreach ($plugins as $plugin) {
-            $handle = $plugin->getHandle();
-            $info[$handle] = [
-                'version' => $plugin->getVersion(),
-                'licenseKey' => $pluginsService->getPluginLicenseKey($handle),
-            ];
-        }
-
-        return $info;
+        return $response;
     }
 }

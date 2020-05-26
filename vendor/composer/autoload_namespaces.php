@@ -7,7 +7,8 @@ $baseDir = dirname($vendorDir);
 
 return array(
     'Twig_' => array($vendorDir . '/twig/twig/lib'),
-    'Imagine' => array($vendorDir . '/pixelandtonic/imagine/lib'),
+    'Props\\' => array($vendorDir . '/mrclay/props-dic/src'),
+    'Pimple' => array($vendorDir . '/pimple/pimple/src'),
+    'JSMin\\' => array($vendorDir . '/mrclay/jsmin-php/src'),
     'HTMLPurifier' => array($vendorDir . '/ezyang/htmlpurifier/library'),
-    'Doctrine\\Common\\Lexer\\' => array($vendorDir . '/doctrine/lexer/lib'),
 );

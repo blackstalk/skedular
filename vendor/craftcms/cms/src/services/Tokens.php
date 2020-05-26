@@ -9,6 +9,7 @@ namespace craft\services;
 
 use Craft;
 use craft\db\Query;
+use craft\db\Table;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Db;
 use craft\helpers\Json;
@@ -19,30 +20,35 @@ use yii\db\Expression;
 
 /**
  * The Tokens service.
- * An instance of the Tokens service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getTokens()|<code>Craft::$app->tokens</code>]].
+ * An instance of the Tokens service is globally accessible in Craft via [[\craft\base\ApplicationTrait::getTokens()|`Craft::$app->tokens`]].
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Tokens extends Component
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var bool
      */
     private $_deletedExpiredTokens = false;
 
-    // Public Methods
-    // =========================================================================
-
     /**
      * Creates a new token and returns it.
+     * ---
+     * ```php
+     * // Route to a controller action
+     * Craft::$app->tokens->createToken('action/path');
      *
-     * @param mixed $route Where matching requests should be routed to. If you
-     * want them to be routed to a controller action, pass:
-     * `['action' => "controller/action", 'params' => ['foo' => 'bar']]`.
+     * // Route to a controller action with params
+     * Craft::$app->tokens->createToken(['action/path', [
+     *     'foo' => 'bar'
+     * ]]);
+     *
+     * // Route to a template
+     * Craft::$app->tokens->createToken(['template' => 'template/path']);
+     * ```
+     *
+     * @param mixed $route Where matching requests should be routed to.
      * @param int|null $usageLimit The maximum number of times this token can be
      * used. Defaults to no limit.
      * @param DateTime|null $expiryDate The date that the token expires.
@@ -89,7 +95,7 @@ class Tokens extends Component
         $this->deleteExpiredTokens();
         $result = (new Query())
             ->select(['id', 'route', 'usageLimit', 'usageCount'])
-            ->from(['{{%tokens}}'])
+            ->from([Table::TOKENS])
             ->where(['token' => $token])
             ->one();
 
@@ -115,7 +121,7 @@ class Tokens extends Component
         // Might be JSON, might not be
         $route = Json::decodeIfJson($route);
 
-        return $route;
+        return (array)$route;
     }
 
     /**
@@ -128,9 +134,9 @@ class Tokens extends Component
     {
         $affectedRows = Craft::$app->getDb()->createCommand()
             ->update(
-                '{{%tokens}}',
+                Table::TOKENS,
                 [
-                    'usageCount' => new Expression('usageCount + 1')
+                    'usageCount' => new Expression('[[usageCount]] + 1')
                 ],
                 [
                     'id' => $tokenId
@@ -149,7 +155,7 @@ class Tokens extends Component
     public function deleteTokenById(int $tokenId): bool
     {
         Craft::$app->getDb()->createCommand()
-            ->delete('{{%tokens}}', ['id' => $tokenId])
+            ->delete(Table::TOKENS, ['id' => $tokenId])
             ->execute();
 
         return true;
@@ -168,7 +174,7 @@ class Tokens extends Component
         }
 
         $affectedRows = Craft::$app->getDb()->createCommand()
-            ->delete('{{%tokens}}', ['<=', 'expiryDate', Db::prepareDateForDb(new DateTime())])
+            ->delete(Table::TOKENS, ['<=', 'expiryDate', Db::prepareDateForDb(new DateTime())])
             ->execute();
 
         $this->_deletedExpiredTokens = true;

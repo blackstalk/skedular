@@ -11,15 +11,12 @@ use craft\helpers\FileHelper;
  */
 class m151016_133600_delete_asset_thumbnails extends Migration
 {
-    // Public Methods
-    // =========================================================================
-
     /**
      * @inheritdoc
      */
     public function safeUp()
     {
-        $folder = Craft::$app->getPath()->getAssetsPath().DIRECTORY_SEPARATOR.'thumbs';
+        $folder = Craft::$app->getPath()->getAssetsPath() . DIRECTORY_SEPARATOR . 'thumbs';
         echo "    > Removing directory: {$folder} ... ";
         FileHelper::removeDirectory($folder);
         echo "done\n";

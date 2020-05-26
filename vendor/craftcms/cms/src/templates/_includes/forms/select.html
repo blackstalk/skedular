@@ -1,6 +1,7 @@
 {%- set class = [
     'select',
-    (class is defined ? class : null)
+    (class is defined ? class : null),
+    (disabled is defined and disabled ? 'disabled' : null),
 ]|filter|join(' ') %}
 
 {%- set options = (options is defined ? options : []) %}
@@ -27,7 +28,7 @@
                 {% set optionLabel = (option.label is defined ? option.label : option) %}
                 {% set optionValue = (option.value is defined ? option.value : key) %}
                 {% set optionDisabled = (option.disabled is defined ? option.disabled : false) %}
-                <option value="{{ optionValue }}"{% if optionValue == value %} selected{% endif %}{% if optionDisabled %} disabled{% endif %}>{{ optionLabel }}</option>
+                <option value="{{ optionValue }}"{% if (optionValue~'') is same as (value~'') %} selected{% endif %}{% if optionDisabled %} disabled{% endif %}>{{ optionLabel }}</option>
             {% endif %}
         {% endfor %}
         {% if hasOptgroups %}

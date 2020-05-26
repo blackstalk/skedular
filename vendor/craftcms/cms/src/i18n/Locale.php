@@ -23,13 +23,10 @@ use yii\helpers\FormatConverter;
  *
  * @property string $displayName The locale’s display name.
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Locale extends BaseObject
 {
-    // Constants
-    // =========================================================================
-
     /**
      * @var int Positive prefix.
      */
@@ -224,13 +221,10 @@ class Locale extends BaseObject
      */
     const FORMAT_JUI = 'jui';
 
-    // Properties
-    // =========================================================================
-
     /**
      * @var array The languages that use RTL orientation.
      */
-    private static $_rtlLanguages = ['ar', 'he', 'ur'];
+    private static $_rtlLanguages = ['ar', 'he', 'ur', 'fa'];
 
     /**
      * @var string|null The locale ID.
@@ -246,9 +240,6 @@ class Locale extends BaseObject
      * @var Formatter|null The locale's formatter.
      */
     private $_formatter;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Constructor.
@@ -267,6 +258,10 @@ class Locale extends BaseObject
 
         if (!Craft::$app->getI18n()->getIsIntlLoaded()) {
             $this->_data = Localization::localeData($this->id);
+
+            if ($this->_data === null && ($languageId = $this->getLanguageID()) !== $this->id) {
+                $this->_data = Localization::localeData($languageId);
+            }
 
             if ($this->_data === null) {
                 $this->_data = Localization::localeData('en-US');
@@ -302,6 +297,7 @@ class Locale extends BaseObject
 
     /**
      * Returns this locale’s script ID.
+     *
      * A script ID consists of only the last four characters after a dash in the locale ID.
      *
      * @return string|null The locale’s script ID, if it has one.
@@ -323,6 +319,7 @@ class Locale extends BaseObject
 
     /**
      * Returns this locale’s territory ID.
+     *
      * A territory ID consists of only the last two to three letter or digits after a dash in the locale ID.
      *
      * @return string|null The locale’s territory ID, if it has one.
@@ -416,6 +413,7 @@ class Locale extends BaseObject
         if ($this->_formatter === null) {
             $config = [
                 'locale' => $this->id,
+                'sizeFormatBase' => 1000,
             ];
 
             if (!Craft::$app->getI18n()->getIsIntlLoaded()) {
@@ -530,7 +528,7 @@ class Locale extends BaseObject
                     break; // September
             }
 
-            return $formatter->format(new DateTime('1970-'.sprintf('%02d', $month).'-01'));
+            return $formatter->format(new DateTime('1970-' . sprintf('%02d', $month) . '-01'));
         }
 
         $which = $standAlone ? 'standAloneMonthNames' : 'monthNames';
@@ -610,7 +608,7 @@ class Locale extends BaseObject
             // 1970-01-08 => Thursday (4 + 4)
             // 1970-01-09 => Friday (5 + 4)
             // 1970-01-10 => Saturday (6 + 4)
-            return $formatter->format(new DateTime('1970-01-'.sprintf('%02d', $day + 4)));
+            return $formatter->format(new DateTime('1970-01-' . sprintf('%02d', $day + 4)));
         }
 
         $which = $standAlone ? 'standAloneWeekDayNames' : 'weekDayNames';
@@ -833,7 +831,7 @@ class Locale extends BaseObject
      * Returns the locale ID.
      *
      * @return string
-     * @deprecated in 3.0. Use id instead.
+     * @deprecated in 3.0.0. Use id instead.
      */
     public function getId(): string
     {
@@ -847,7 +845,7 @@ class Locale extends BaseObject
      *
      * @param string|null $targetLocaleId
      * @return string|null
-     * @deprecated in 3.0. Use getDisplayName() instead.
+     * @deprecated in 3.0.0. Use getDisplayName() instead.
      */
     public function getName(string $targetLocaleId = null)
     {
@@ -865,7 +863,7 @@ class Locale extends BaseObject
      * Returns the locale name in its own language.
      *
      * @return string|false
-     * @deprecated in 3.0. Use getDisplayName() instead.
+     * @deprecated in 3.0.0. Use getDisplayName() instead.
      */
     public function getNativeName()
     {
@@ -873,9 +871,6 @@ class Locale extends BaseObject
 
         return $this->getDisplayName();
     }
-
-    // Private Methods
-    // =========================================================================
 
     /**
      * Returns a localized date/time format.
@@ -891,7 +886,7 @@ class Locale extends BaseObject
         $icuFormat = $this->_getDateTimeIcuFormat($length, $withDate, $withTime);
 
         if ($format !== self::FORMAT_ICU) {
-            $type = ($withDate ? 'date' : '').($withTime ? 'time' : '');
+            $type = ($withDate ? 'date' : '') . ($withTime ? 'time' : '');
 
             switch ($format) {
                 case self::FORMAT_PHP:
@@ -939,7 +934,7 @@ class Locale extends BaseObject
                     $length = IntlDateFormatter::SHORT;
                     break;
                 default:
-                    throw new Exception('Invalid date/time format length: '.$length);
+                    throw new Exception('Invalid date/time format length: ' . $length);
             }
 
             $dateType = ($withDate ? $length : IntlDateFormatter::NONE);
@@ -947,19 +942,14 @@ class Locale extends BaseObject
             $formatter = new IntlDateFormatter($this->id, $dateType, $timeType);
             $pattern = $formatter->getPattern();
 
-            // Use 4-digit year, and no leading zeroes on days/months
+            // Use 4-digit years
             return strtr($pattern, [
                 'yyyy' => 'yyyy',
                 'yy' => 'yyyy',
-                'MMMMM' => 'MMMMM',
-                'MMMM' => 'MMMM',
-                'MMM' => 'MMM',
-                'MM' => 'M',
-                'dd' => 'd',
             ]);
         }
 
-        $type = ($withDate ? 'date' : '').($withTime ? 'time' : '');
+        $type = ($withDate ? 'date' : '') . ($withTime ? 'time' : '');
 
         switch ($length) {
             case self::LENGTH_SHORT:

@@ -1,0 +1,59 @@
+{% extends "_layout" %}
+
+{% block main %}
+
+	<section class="form">
+			<div class="container">
+				<div class="center">
+
+					<h1 class="f2 f1-l fw2 white-90 mb0 lh-title">Sign Up</h1>
+					<form method="post" accept-charset="UTF-8">
+                        {{ csrfInput() }}
+                        {{ actionInput('users/save-user') }}
+                        {{ redirectInput('') }}
+
+                        {% macro errorList(errors) %}
+                            {% if errors %}
+                                <ul class="errors">
+                                    {% for error in errors %}
+                                        <li>{{ error }}</li>
+                                    {% endfor %}
+                                </ul>
+                            {% endif %}
+                        {% endmacro %}
+                        
+                        <div class="form-group">
+                        {# <h3><label for="username">Username</label></h3> #}
+                        <input placeholder="Username" id="username" type="text" name="username"
+                            {%- if user is defined %} value="{{ user.username }}"{% endif -%}>
+
+                        {% if user is defined %}
+                            {{ _self.errorList(user.getErrors('username')) }}
+                        {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                        {# <h3><label for="email">Email</label></h3> #}
+                        <input placeholder="Email" id="email" type="text" name="email"
+                            {%- if user is defined %} value="{{ user.email }}"{% endif %}>
+
+                        {% if user is defined %}
+                            {{ _self.errorList(user.getErrors('email')) }}
+                        {% endif %}
+                        </div>
+
+                        <div class="form-group">
+                        {# <h3><label for="password">Password</label></h3> #}
+                        <input placeholder="Password" id="password" type="password" name="password">
+
+                        {% if user is defined %}
+                            {{ _self.errorList(user.getErrors('password')) }}
+                        {% endif %}
+                        </div>
+
+                        <button type="submit">Register</button>
+                    </form>
+			</div>
+	</section>
+
+{% endblock %}

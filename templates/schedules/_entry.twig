@@ -1,0 +1,130 @@
+{#
+ # News entry template
+ # -------------------
+ #
+ # This template gets loaded whenever a News entry’s URL is
+ # requested. That’s because the News section’s Template setting is
+ # set to “news/_entry”, the path to this template.
+ #
+ # When this template is loaded, it will already have an ‘entry’
+ # variable, set to the requested News entry.
+ #
+ # See this page for more details on how Craft routes requests:
+ # http://craftcms.com/docs/routing
+ #}
+
+{% extends "_layout" %}
+
+{% block main %}
+{% set currentTimezone = "America/Chicago" %}
+
+{% do setCookie('lastVisitedSchedule', entry.slug, now | date_modify("+1 hour").timestamp) %}
+{# Sets a cookie to expire in an hour. #}
+
+	<article class="schedule">
+
+		<div class="schedule-info">
+			<div class="row">
+				<div class="col-sm-6">
+					<h1 class="f2 f1-l fw1 white mb0 lh-title"><strong>{{ entry.title }}<strong></h1>
+					<p>Today is {{ "now"|date("l", currentTimezone) }} {{ "now"|date("m/d/Y", currentTimezone) }}</p>
+				</div>
+				<div class="col-sm-6 text-right">{{ entry.body }}</div>
+			</div>
+		</div>
+		
+		{% set blocks = entry.daysOfWeek.all() %}
+		{% for day in  0..6 %}
+			{% set myDate = '+' ~ day ~ ' day' %}
+			<div class="schedule-day">
+			{% if blocks|length %}
+				{% for block in blocks %}
+					{% if block.type == "days" and block.timeSlots|length and  myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						{# {% if "now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						We are here
+						{% endif %}
+						{{ block.dayOfWeek|upper }}  #}
+						{% set dayReservations = 0 %}
+						{% set reservationIdsForThisDay = [] %}
+						{% for res in craft.entries({ section: 'reservations' }) %}
+							{# {{ myDate|date("F j, Y", currentTimezone) }}
+							{{ res.reservationDate|date("F j, Y", currentTimezone) }} #}
+							{% if res.reservationDate|date("F j, Y", currentTimezone) == myDate|date("F j, Y", currentTimezone) %}
+								{% set dayReservations = dayReservations + 1 %}
+								{% set reservationIdsForThisDay = reservationIdsForThisDay|merge([res.id]) %}
+							{% endif %}
+						{% endfor %}
+						<div class="schedule-day--info"><span class="lg-text">{{ myDate|date("l", currentTimezone)|upper }}</span> <strong>{{ myDate|date("m/d/Y", currentTimezone) }}</strong> | Resevations: {{ dayReservations }}</div>
+
+						<ul {{ ("now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper) ? 'class="current-day"' }}>
+							{% for slot in block.timeSlots %}
+								<li>
+									<div class="row">
+										<div class="col-sm-6">
+											Start: <span class="md-text">{{ slot.startTime|date('g:i:s a', currentTimezone) }}</span> - End: <span class="md-text">{{ slot.endTime|date('g:i:s a', currentTimezone) }}</span> 
+										</div>
+									
+									
+										{% set reservationsIdsForTimeSlot = [] %}
+										{% set reservationUsersInfoForTimeSlot = [] %}
+										{% set userIsSignedUpForSlot = false %}
+										{% set isExpired = (slot.startTime|date('g:i:s a', currentTimezone) < "now"|date("g:i:s a", currentTimezone) and myDate|date("l", currentTimezone)|upper == "now"|date("l", currentTimezone)|upper ) ? true : false %}
+										{% for resInIds in craft.entries({
+											section: 'reservations',
+											id: reservationIdsForThisDay
+										}) %}
+											{% if resInIds.reservationTime|date('g:i:s a', currentTimezone) == slot.startTime|date('g:i:s a', currentTimezone) %}
+												{% set reservationsIdsForTimeSlot = reservationsIdsForTimeSlot|merge([resInIds.id]) %}
+												{% set reservedUserInfo = {
+													userId: resInIds.reservedUser.one().id,
+													userName: resInIds.reservedUser.one().username
+												} %}
+												{% if currentUser %}
+													{% set userIsSignedUpForSlot = (currentUser.id == resInIds.reservedUser.one().id) ? true : false %}
+												{% endif %}
+												{% set reservationUsersInfoForTimeSlot = reservationUsersInfoForTimeSlot|merge([reservedUserInfo]) %}
+											{% endif %}
+										{% endfor %}
+										{% if isExpired == false %}
+											<div class="col-sm-2">Signed Up: <span class="md-text">{{ reservationsIdsForTimeSlot|length }}</span></div>
+											<div class="col-sm-2">Allowed: <span class="md-text">{{ block.threshold }}</span></div>
+											<div class="col-sm-2">Remaining: <span class="md-text">{{ (block.threshold - reservationsIdsForTimeSlot|length) }}</span> of <span class='md-text'>{{ block.threshold }}</span></div>
+										{% endif %}
+									</div> <!-- end row -->
+									<div class="row">
+										<div class="col-sm-12">
+											<div class="schedule-day--actions">
+												{% if reservationUsersInfoForTimeSlot|length > 0 %}
+													Signed Up:
+													{% for userInfo in reservationUsersInfoForTimeSlot %}
+														<div class="schedule-day--attendee">{{ userInfo.userName }}</div>
+														{% if currentUser and userInfo.userName == currentUser.friendlyName %}
+															{% set userIsSignedUpForSlot = true %}
+														{% endif %}
+													{% endfor %}
+												{% endif %}
+										
+												{% if currentUser %}
+													{% if isExpired == true %}
+														<button disabled class="f6 link dim br-pill ba ph3 pv2 mb2 dib dark-red">Expired</button>
+													{% elseif userIsSignedUpForSlot == true %}
+														<button disabled class="f6 link dim br-pill ba ph3 pv2 mb2 dib dark-green">You're signed up!</button>
+													{% else %}
+														<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) }}" class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green">Reserve A Spot</a>
+													{% endif %}
+												{% endif %}
+										</div>
+									</div> <!-- end row -->	
+								</li>
+							{% endfor %}
+						<ul>
+					{% elseif block.type == "days" and block.timeSlots|length < 1 and myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+						<span class="lg-text">{{ block.dayOfWeek|upper }}</span> is closed
+					{% endif %}
+				{% endfor %}
+			{% endif %}
+			</div>
+		{% endfor %}
+		
+	</article>
+{% endblock %}

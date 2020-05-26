@@ -13,7 +13,6 @@ use craft\errors\ImageException;
 use craft\helpers\App;
 use craft\helpers\FileHelper;
 use craft\helpers\Image as ImageHelper;
-use craft\helpers\StringHelper;
 use Imagine\Exception\NotSupportedException;
 use Imagine\Exception\RuntimeException;
 use Imagine\Gd\Imagine as GdImagine;
@@ -31,13 +30,10 @@ use yii\base\ErrorException;
  * Raster class is used for raster image manipulations.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Raster extends Image
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var string|null
      */
@@ -77,9 +73,6 @@ class Raster extends Image
      * @var Font|null
      */
     private $_font;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -153,7 +146,7 @@ class Raster extends Image
         $imageService = Craft::$app->getImages();
 
         if (!is_file($path)) {
-            Craft::error('Tried to load an image at '.$path.', but the file does not exist.', __METHOD__);
+            Craft::error('Tried to load an image at ' . $path . ', but the file does not exist.', __METHOD__);
             throw new ImageException(Craft::t('app', 'No file exists at the given path.'));
         }
 
@@ -171,12 +164,14 @@ class Raster extends Image
 
         try {
             $this->_image = $this->_instance->open($path);
-        } catch (\Throwable $exception) {
-            throw new ImageException(Craft::t('app', 'The file “{path}” does not appear to be an image.', ['path' => $path]));
+        } catch (\Throwable $e) {
+            throw new ImageException(Craft::t('app', 'The file “{path}” does not appear to be an image.', ['path' => $path]), 0, $e);
         }
 
         // For Imagick, convert CMYK to RGB, save and re-open.
-        if (!Craft::$app->getImages()->getIsGd()
+        if (
+            !Craft::$app->getImages()->getIsGd()
+            && !Craft::$app->getConfig()->getGeneral()->preserveCmykColorspace
             && method_exists($this->_image->getImagick(), 'getImageColorspace')
             && $this->_image->getImagick()->getImageColorspace() === \Imagick::COLORSPACE_CMYK
             && method_exists($this->_image->getImagick(), 'transformImageColorspace')
@@ -208,7 +203,6 @@ class Raster extends Image
         $height = $y2 - $y1;
 
         if ($this->_isAnimatedGif) {
-
             // Create a new image instance to avoid object references messing up our dimensions.
             $newSize = new Box($width, $height);
             $startingPoint = new Point($x1, $y1);
@@ -240,6 +234,8 @@ class Raster extends Image
     {
         $this->normalizeDimensions($targetWidth, $targetHeight);
 
+        $scaleIfSmaller = $scaleIfSmaller && Craft::$app->getConfig()->getGeneral()->upscaleImages;
+
         if ($scaleIfSmaller || $this->getWidth() > $targetWidth || $this->getHeight() > $targetHeight) {
             $factor = max($this->getWidth() / $targetWidth, $this->getHeight() / $targetHeight);
             $this->resize(round($this->getWidth() / $factor), round($this->getHeight() / $factor));
@@ -255,90 +251,99 @@ class Raster extends Image
     {
         $this->normalizeDimensions($targetWidth, $targetHeight);
 
-        if ($scaleIfSmaller || $this->getWidth() > $targetWidth || $this->getHeight() > $targetHeight) {
+        if ($scaleIfSmaller || ($this->getWidth() > $targetWidth && $this->getHeight() > $targetHeight)) {
             // Scale first.
             $factor = min($this->getWidth() / $targetWidth, $this->getHeight() / $targetHeight);
             $newHeight = round($this->getHeight() / $factor);
             $newWidth = round($this->getWidth() / $factor);
 
             $this->resize($newWidth, $newHeight);
-
-            if (is_array($cropPosition)) {
-                $centerX = $newWidth * $cropPosition['x'];
-                $centerY = $newHeight * $cropPosition['y'];
-                $x1 = $centerX - $targetWidth / 2;
-                $y1 = $centerY - $targetHeight / 2;
-                $x2 = $x1 + $targetWidth;
-                $y2 = $y1 + $targetHeight;
-
-                // Now see if we have to bump this around to make it fit the image.
-                if ($x1 < 0) {
-                    $x2 -= $x1;
-                    $x1 = 0;
-                }
-                if ($y1 < 0) {
-                    $y2 -= $y1;
-                    $y1 = 0;
-                }
-                if ($x2 > $newWidth) {
-                    $x1 -= ($x2 - $newWidth);
-                    $x2 = $newWidth;
-                }
-                if ($y2 > $newHeight) {
-                    $y1 -= ($y2 - $newHeight);
-                    $y2 = $newHeight;
-                }
-            } else {
-                list($verticalPosition, $horizontalPosition) = explode('-', $cropPosition);
-
-                // Now crop.
-                if ($newWidth - $targetWidth > 0) {
-
-                    switch ($horizontalPosition) {
-                        case 'left':
-                            $x1 = 0;
-                            $x2 = $x1 + $targetWidth;
-                            break;
-                        case 'right':
-                            $x2 = $newWidth;
-                            $x1 = $newWidth - $targetWidth;
-                            break;
-                        default:
-                            $x1 = round(($newWidth - $targetWidth) / 2);
-                            $x2 = $x1 + $targetWidth;
-                            break;
-                    }
-
-                    $y1 = 0;
-                    $y2 = $y1 + $targetHeight;
-                } else if ($newHeight - $targetHeight > 0) {
-                    switch ($verticalPosition) {
-                        case 'top':
-                            $y1 = 0;
-                            $y2 = $y1 + $targetHeight;
-                            break;
-                        case 'bottom':
-                            $y2 = $newHeight;
-                            $y1 = $newHeight - $targetHeight;
-                            break;
-                        default:
-                            $y1 = round(($newHeight - $targetHeight) / 2);
-                            $y2 = $y1 + $targetHeight;
-                            break;
-                    }
-
-                    $x1 = 0;
-                    $x2 = $x1 + $targetWidth;
-                } else {
-                    $x1 = round(($newWidth - $targetWidth) / 2);
-                    $x2 = $x1 + $targetWidth;
-                    $y1 = round(($newHeight - $targetHeight) / 2);
-                    $y2 = $y1 + $targetHeight;
-                }
-            }
-
-            $this->crop($x1, $x2, $y1, $y2);
+        } else if (($targetWidth > $this->getWidth() || $targetHeight > $this->getHeight()) && !$scaleIfSmaller) {
+            // Figure the crop size reductions
+            $factor = max($targetWidth / $this->getWidth(), $targetHeight / $this->getHeight());
+            $newHeight = $this->getHeight();
+            $newWidth = $this->getWidth();
+            $targetHeight = round($targetHeight / $factor);
+            $targetWidth = round($targetWidth / $factor);
+        } else {
+            $newHeight = $this->getHeight();
+            $newWidth = $this->getWidth();
         }
+
+        if (is_array($cropPosition)) {
+            $centerX = $newWidth * $cropPosition['x'];
+            $centerY = $newHeight * $cropPosition['y'];
+            $x1 = $centerX - $targetWidth / 2;
+            $y1 = $centerY - $targetHeight / 2;
+            $x2 = $x1 + $targetWidth;
+            $y2 = $y1 + $targetHeight;
+
+            // Now see if we have to bump this around to make it fit the image.
+            if ($x1 < 0) {
+                $x2 -= $x1;
+                $x1 = 0;
+            }
+            if ($y1 < 0) {
+                $y2 -= $y1;
+                $y1 = 0;
+            }
+            if ($x2 > $newWidth) {
+                $x1 -= ($x2 - $newWidth);
+                $x2 = $newWidth;
+            }
+            if ($y2 > $newHeight) {
+                $y1 -= ($y2 - $newHeight);
+                $y2 = $newHeight;
+            }
+        } else {
+            list($verticalPosition, $horizontalPosition) = explode('-', $cropPosition);
+
+            // Now crop.
+            if ($newWidth - $targetWidth > 0) {
+                switch ($horizontalPosition) {
+                    case 'left':
+                        $x1 = 0;
+                        $x2 = $x1 + $targetWidth;
+                        break;
+                    case 'right':
+                        $x2 = $newWidth;
+                        $x1 = $newWidth - $targetWidth;
+                        break;
+                    default:
+                        $x1 = round(($newWidth - $targetWidth) / 2);
+                        $x2 = $x1 + $targetWidth;
+                        break;
+                }
+
+                $y1 = 0;
+                $y2 = $y1 + $targetHeight;
+            } else if ($newHeight - $targetHeight > 0) {
+                switch ($verticalPosition) {
+                    case 'top':
+                        $y1 = 0;
+                        $y2 = $y1 + $targetHeight;
+                        break;
+                    case 'bottom':
+                        $y2 = $newHeight;
+                        $y1 = $newHeight - $targetHeight;
+                        break;
+                    default:
+                        $y1 = round(($newHeight - $targetHeight) / 2);
+                        $y2 = $y1 + $targetHeight;
+                        break;
+                }
+
+                $x1 = 0;
+                $x2 = $x1 + $targetWidth;
+            } else {
+                $x1 = round(($newWidth - $targetWidth) / 2);
+                $x2 = $x1 + $targetWidth;
+                $y1 = round(($newHeight - $targetHeight) / 2);
+                $y2 = $y1 + $targetHeight;
+            }
+        }
+
+        $this->crop($x1, $x2, $y1, $y2);
 
         return $this;
     }
@@ -351,7 +356,6 @@ class Raster extends Image
         $this->normalizeDimensions($targetWidth, $targetHeight);
 
         if ($this->_isAnimatedGif) {
-
             // Create a new image instance to avoid object references messing up our dimensions.
             $newSize = new Box($targetWidth, $targetHeight);
             $gif = $this->_instance->create($newSize);
@@ -370,11 +374,9 @@ class Raster extends Image
             $this->_image = $gif;
         } else {
             if (Craft::$app->getImages()->getIsImagick() && Craft::$app->getConfig()->getGeneral()->optimizeImageFilesize) {
-                $config = Craft::$app->getConfig()->getGeneral();
-                $keepImageProfiles = $config->preserveImageColorProfiles;
-                $keepExifData = $config->preserveExifData;
+                $keepImageProfiles = Craft::$app->getConfig()->getGeneral()->preserveImageColorProfiles;
 
-                $this->_image->smartResize(new Box($targetWidth, $targetHeight), $keepImageProfiles, $keepExifData, $this->_quality);
+                $this->_image->smartResize(new Box($targetWidth, $targetHeight), $keepImageProfiles, true, $this->_quality);
             } else {
                 $this->_image->resize(new Box($targetWidth, $targetHeight), $this->_getResizeFilter());
             }
@@ -459,10 +461,10 @@ class Raster extends Image
      */
     public function saveAs(string $targetPath, bool $autoQuality = false): bool
     {
-        $extension = StringHelper::toLowerCase(pathinfo($targetPath, PATHINFO_EXTENSION));
+        $extension = mb_strtolower(pathinfo($targetPath, PATHINFO_EXTENSION));
 
         $options = $this->_getSaveOptions(null, $extension);
-        $targetPath = pathinfo($targetPath, PATHINFO_DIRNAME).DIRECTORY_SEPARATOR.pathinfo($targetPath, PATHINFO_FILENAME).'.'.pathinfo($targetPath, PATHINFO_EXTENSION);
+        $targetPath = pathinfo($targetPath, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR . pathinfo($targetPath, PATHINFO_FILENAME) . '.' . pathinfo($targetPath, PATHINFO_EXTENSION);
 
         try {
             if ($autoQuality && in_array($extension, ['jpeg', 'jpg', 'png'], true)) {
@@ -474,9 +476,12 @@ class Raster extends Image
                 try {
                     rename($tempFile, $targetPath);
                 } catch (ErrorException $e) {
-                    Craft::warning("Unable to rename \"{$tempFile}\" to \"{$targetPath}\": ".$e->getMessage(), __METHOD__);
+                    Craft::warning("Unable to rename \"{$tempFile}\" to \"{$targetPath}\": " . $e->getMessage(), __METHOD__);
                 }
             } else {
+                if (Craft::$app->getImages()->getIsImagick()) {
+                    ImageHelper::cleanExifDataFromImagickImage($this->_image->getImagick());
+                }
                 $this->_image->save($targetPath, $options);
             }
         } catch (RuntimeException $e) {
@@ -500,7 +505,7 @@ class Raster extends Image
         } catch (RuntimeException $e) {
             try {
                 // Invalid SVG. Maybe it's missing its DTD?
-                $svgContent = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>'.$svgContent;
+                $svgContent = '<?xml version="1.0" encoding="UTF-8" standalone="no"?>' . $svgContent;
                 $this->_image = $this->_instance->load($svgContent);
             } catch (RuntimeException $e) {
                 throw new ImageException(Craft::t('app', 'Failed to load the SVG string.'), $e->getCode(), $e);
@@ -590,7 +595,6 @@ class Raster extends Image
      */
     public function writeText(string $text, int $x, int $y, int $angle = 0)
     {
-
         if ($this->_font === null) {
             throw new ImageException(Craft::t('app', 'No font properties have been set. Call ImageHelper::setFontProperties() first.'));
         }
@@ -599,8 +603,24 @@ class Raster extends Image
         $this->_image->draw()->text($text, $this->_font, $point, $angle);
     }
 
-    // Private Methods
-    // =========================================================================
+    /**
+     * Disable animation if this is an animated image.
+     *
+     * @return $this
+     */
+    public function disableAnimation()
+    {
+        $this->_isAnimatedGif = false;
+
+        if ($this->_image->layers()->count() > 1) {
+            // Fetching the first layer returns the built-in Imagick object
+            // So cycle that through the loading phase to get one that sports the
+            // `smartResize` functionality.
+            $this->_image = $this->_instance->load((string)$this->_image->layers()->get(0));
+        }
+
+        return $this;
+    }
 
     /**
      * @param string $tempFileName
@@ -614,7 +634,7 @@ class Raster extends Image
     private function _autoGuessImageQuality(string $tempFileName, int $originalSize, string $extension, int $minQuality, int $maxQuality, int $step = 0): string
     {
         if ($step === 0) {
-            $tempFileName = pathinfo($tempFileName, PATHINFO_DIRNAME).DIRECTORY_SEPARATOR.pathinfo($tempFileName, PATHINFO_FILENAME).'-temp.'.$extension;
+            $tempFileName = pathinfo($tempFileName, PATHINFO_DIRNAME) . DIRECTORY_SEPARATOR . pathinfo($tempFileName, PATHINFO_FILENAME) . '-temp.' . $extension;
         }
 
         // Find our target quality by splitting the min and max qualities
@@ -635,6 +655,10 @@ class Raster extends Image
             clearstatcache();
 
             // Generate one last time.
+            if (Craft::$app->getImages()->getIsImagick()) {
+                ImageHelper::cleanExifDataFromImagickImage($this->_image->getImagick());
+            }
+
             $this->_image->save($tempFileName, $this->_getSaveOptions($midQuality));
 
             return $tempFileName;
@@ -701,7 +725,7 @@ class Raster extends Image
                     // a valid format: http://www.imagemagick.org/script/formats.php
                     // So 2 channel PNGs get converted to 4 channel.
                     if (is_array($pngInfo) && isset($pngInfo['channels']) && $pngInfo['channels'] !== 2) {
-                        $format = 'png'.(8 * $pngInfo['channels']);
+                        $format = 'png' . (8 * $pngInfo['channels']);
                     } else {
                         $format = 'png32';
                     }

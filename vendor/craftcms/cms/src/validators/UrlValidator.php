@@ -8,26 +8,22 @@
 namespace craft\validators;
 
 use Craft;
+use craft\behaviors\EnvAttributeParserBehavior;
 use yii\validators\UrlValidator as YiiUrlValidator;
 
 /**
  * Class UrlValidator.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class UrlValidator extends YiiUrlValidator
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var bool Whether the value can begin with an alias
+     * @deprecated
      */
     public $allowAlias = false;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * @inheritdoc
@@ -45,6 +41,18 @@ class UrlValidator extends YiiUrlValidator
         }
 
         parent::__construct($config);
+    }
+
+    /**
+     * @inheritdoc
+     */
+    public function init()
+    {
+        parent::init();
+
+        if ($this->allowAlias) {
+            Craft::$app->getDeprecator()->log(__CLASS__ . '::allowAlias', __CLASS__ . '::allowAlias has been deprecated. Models should use ' . EnvAttributeParserBehavior::class . ' instead.');
+        }
     }
 
     /**

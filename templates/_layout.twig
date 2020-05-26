@@ -32,6 +32,7 @@
 			# <meta name="robots" content="index, follow">
 		#}
 		{# {% hook 'seomaticRender' %} #}
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-grid-only@1.0.0/bootstrap.css" integrity="sha256-9imRszwBuS30D+LpkdIYNYpcgU5lDinHqIqkR0X6fSc=" crossorigin="anonymous">
 
 		<link rel="home" href="{{ siteUrl }}" />
 
@@ -53,16 +54,23 @@
 	</head>
 	<body>
 
-		<div id="app">
+		<div id="app" class="{% if currentUser %}logged-in{% endif %}">
 
 			{# HEADER #}
 			<header role="banner">
-				{% block header %}{% endblock %}
+				{% block header %}
+					{% include 'components/_header.twig' %}
+				{% endblock %}
 			</header>
 
 			{# MAIN #}
 			<main role="main">
-				{% block main %}{% endblock %}
+			<!-- Content panel -->
+				<div id="content" class="cover bg-left bg-center-l {% if entry.uri == "__home__" or entry.uri == "login" or entry.uri == "sign-up" or entry.uri == "reserve" %}home-container{% endif %}">
+					{% include 'components/_navbar.twig' %}
+					{% block main %}{% endblock %}
+				</div>
+				
 			</main>
 
 			{# FOOTER #}

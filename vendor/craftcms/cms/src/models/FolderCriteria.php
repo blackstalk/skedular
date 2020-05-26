@@ -13,13 +13,10 @@ use craft\base\Model;
  * Folders parameters.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class FolderCriteria extends Model
 {
-    // Properties
-    // =========================================================================
-
     /**
      * @var int|null ID
      */
@@ -60,16 +57,18 @@ class FolderCriteria extends Model
      */
     public $limit;
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var string|string[]|null
+     */
+    public $uid;
 
     /**
      * @inheritdoc
      */
-    public function rules()
+    protected function defineRules(): array
     {
-        return [
-            [['id', 'parentId', 'sourceId', 'offset', 'limit'], 'number', 'integerOnly' => true],
-        ];
+        $rules = parent::defineRules();
+        $rules[] = [['id', 'parentId', 'sourceId', 'offset', 'limit'], 'number', 'integerOnly' => true];
+        return $rules;
     }
 }

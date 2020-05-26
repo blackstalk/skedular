@@ -13,30 +13,24 @@ use craft\helpers\StringHelper;
  * Search Query class.
  *
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class SearchQuery
 {
-    // Properties
-    // =========================================================================
-
     /**
-     * @var string|null
+     * @var string
      */
     private $_query;
 
     /**
-     * @var array|null
+     * @var array
      */
     private $_termOptions;
 
     /**
-     * @var array|null
+     * @var SearchQueryTerm[]|SearchQueryTermGroup
      */
     private $_tokens;
-
-    // Public Methods
-    // =========================================================================
 
     /**
      * Constructor
@@ -72,9 +66,6 @@ class SearchQuery
         return $this->_query;
     }
 
-    // Private Methods
-    // =========================================================================
-
     /**
      * Parses the query into an array of tokens.
      */
@@ -105,12 +96,8 @@ class SearchQuery
                 }
             }
 
-            $term = new SearchQueryTerm();
-
-            // Set the default options
-            foreach ($this->_termOptions as $option => $value) {
-                $term->$option = $value;
-            }
+            // Instantiate the term w/ default options
+            $term = new SearchQueryTerm($this->_termOptions);
 
             // Is this an exclude term?
             if (StringHelper::first($token, 1) === '-') {
@@ -123,6 +110,8 @@ class SearchQuery
                 list(, $term->attribute, $colons, $token) = $match;
                 if ($colons === '::') {
                     $term->exact = true;
+                    $term->subLeft = false;
+                    $term->subRight = false;
                 }
             }
 
@@ -133,7 +122,7 @@ class SearchQuery
                 if (StringHelper::last($token, 1) === StringHelper::first($token, 1)) {
                     $token = mb_substr($token, 1, -1);
                 } else {
-                    $token = mb_substr($token, 1).' '.strtok(StringHelper::first($token, 1));
+                    $token = mb_substr($token, 1) . ' ' . strtok(StringHelper::first($token, 1));
                 }
 
                 $term->phrase = true;

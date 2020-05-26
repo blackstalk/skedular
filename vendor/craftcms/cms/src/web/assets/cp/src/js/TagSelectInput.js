@@ -43,7 +43,7 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
             this.$addTagInput = this.$container.children('.add').children('.text');
             this.$spinner = this.$addTagInput.next();
 
-            this.addListener(this.$addTagInput, 'textchange', $.proxy(function() {
+            this.addListener(this.$addTagInput, 'input', $.proxy(function() {
                 if (this.searchTimeout) {
                     clearTimeout(this.searchTimeout);
                 }
@@ -133,8 +133,14 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
                         var $li;
 
                         for (var i = 0; i < response.tags.length; i++) {
-                            $li = $('<li/>').appendTo($ul);
-                            $('<a data-icon="tag"/>').appendTo($li).text(response.tags[i].title).data('id', response.tags[i].id);
+                            $li = $('<li/>')
+                                .appendTo($ul);
+
+                            $('<a data-icon="tag"/>')
+                                .appendTo($li)
+                                .text(response.tags[i].title)
+                                .data('id', response.tags[i].id)
+                                .addClass(response.tags[i].exclude ? 'disabled' : '');
                         }
 
                         if (!response.exactMatch) {
@@ -142,7 +148,7 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
                             $('<a data-icon="plus"/>').appendTo($li).text(data.search);
                         }
 
-                        $ul.find('> li:first-child > a').addClass('hover');
+                        $ul.find('a:not(.disabled):first').addClass('hover');
 
                         this.searchMenu = new Garnish.Menu($menu, {
                             attachToElement: this.$addTagInput,
@@ -155,7 +161,6 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
 
                         this.searchMenu.show();
                     }
-
                 }, this));
             }
             else {
@@ -164,9 +169,14 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
         },
 
         selectTag: function(option) {
-            var $option = $(option),
-                id = $option.data('id'),
-                title = $option.text();
+            var $option = $(option);
+
+            if ($option.hasClass('disabled')) {
+                return;
+            }
+
+            var id = $option.data('id');
+            var title = $option.text();
 
             var $element = $('<div/>', {
                 'class': 'element small removable',
@@ -232,7 +242,7 @@ Craft.TagSelectInput = Craft.BaseElementSelectInput.extend(
 
                         if (textStatus === 'success') {
                             // Some sort of validation error that still resulted in  a 200 response. Shouldn't be possible though.
-                            Craft.cp.displayError(Craft.t('app', 'An unknown error occurred.'));
+                            Craft.cp.displayError(Craft.t('app', 'A server error occurred.'));
                         }
                     }
                 }, this));

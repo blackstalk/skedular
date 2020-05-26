@@ -19,10 +19,12 @@ use craft\errors\ShellCommandException;
 use craft\events\BackupEvent;
 use craft\events\RestoreEvent;
 use craft\helpers\App;
+use craft\helpers\Db;
 use craft\helpers\FileHelper;
 use craft\helpers\StringHelper;
 use mikehaertl\shellcommand\Command as ShellCommand;
 use yii\base\Exception;
+use yii\base\InvalidArgumentException;
 use yii\base\NotSupportedException;
 use yii\db\Exception as DbException;
 
@@ -30,17 +32,18 @@ use yii\db\Exception as DbException;
  * @inheritdoc
  * @property MysqlQueryBuilder|PgsqlQueryBuilder $queryBuilder The query builder for the current DB connection.
  * @property MysqlSchema|PgsqlSchema $schema The schema information for the database opened by this connection.
+ * @property bool $supportsMb4 Whether the database supports 4+ byte characters.
  * @method MysqlQueryBuilder|PgsqlQueryBuilder getQueryBuilder() Returns the query builder for the current DB connection.
  * @method MysqlSchema|PgsqlSchema getSchema() Returns the schema information for the database opened by this connection.
  * @method TableSchema getTableSchema($name, $refresh = false) Obtains the schema information for the named table.
  * @method Command createCommand($sql = null, $params = []) Creates a command for execution.
  * @author Pixel & Tonic, Inc. <support@pixelandtonic.com>
- * @since 3.0
+ * @since 3.0.0
  */
 class Connection extends \yii\db\Connection
 {
-    // Constants
-    // =========================================================================
+    const DRIVER_MYSQL = 'mysql';
+    const DRIVER_PGSQL = 'pgsql';
 
     /**
      * @event BackupEvent The event that is triggered before the backup is created.
@@ -62,49 +65,25 @@ class Connection extends \yii\db\Connection
      */
     const EVENT_AFTER_RESTORE_BACKUP = 'afterRestoreBackup';
 
-    // Static
-    // =========================================================================
-
     /**
      * Creates a new Connection instance based off the given DbConfig object.
      *
      * @param DbConfig $config
      * @return static
+     * @deprecated in 3.0.18. Use [[App::dbConfig()]] instead.
      */
     public static function createFromConfig(DbConfig $config): Connection
     {
-        if ($config->driver === DbConfig::DRIVER_MYSQL) {
-            $schemaConfig = [
-                'class' => MysqlSchema::class,
-            ];
-        } else {
-            $schemaConfig = [
-                'class' => PgsqlSchema::class,
-                'defaultSchema' => $config->schema,
-            ];
-        }
-
-        return Craft::createObject([
-            'class' => static::class,
-            'driverName' => $config->driver,
-            'dsn' => $config->dsn,
-            'username' => $config->user,
-            'password' => $config->password,
-            'charset' => $config->charset,
-            'tablePrefix' => $config->tablePrefix,
-            'schemaMap' => [
-                $config->driver => $schemaConfig,
-            ],
-            'commandMap' => [
-                $config->driver => Command::class,
-            ],
-            'attributes' => $config->attributes,
-            'enableSchemaCache' => true,
-        ]);
+        $config = App::dbConfig($config);
+        return Craft::createObject($config);
     }
 
-    // Public Methods
-    // =========================================================================
+    /**
+     * @var bool|null whether the database supports 4+ byte characters
+     * @see getSupportsMb4()
+     * @see setSupportsMb4()
+     */
+    private $_supportsMb4;
 
     /**
      * Returns whether this is a MySQL connection.
@@ -113,7 +92,7 @@ class Connection extends \yii\db\Connection
      */
     public function getIsMysql(): bool
     {
-        return $this->getDriverName() === DbConfig::DRIVER_MYSQL;
+        return $this->getDriverName() === Connection::DRIVER_MYSQL;
     }
 
     /**
@@ -123,7 +102,7 @@ class Connection extends \yii\db\Connection
      */
     public function getIsPgsql(): bool
     {
-        return $this->getDriverName() === DbConfig::DRIVER_PGSQL;
+        return $this->getDriverName() === Connection::DRIVER_PGSQL;
     }
 
     /**
@@ -135,6 +114,29 @@ class Connection extends \yii\db\Connection
     {
         $version = $this->getMasterPdo()->getAttribute(\PDO::ATTR_SERVER_VERSION);
         return App::normalizeVersion($version);
+    }
+
+    /**
+     * Returns whether the database supports 4+ byte characters.
+     *
+     * @return bool
+     */
+    public function getSupportsMb4(): bool
+    {
+        if ($this->_supportsMb4 !== null) {
+            return $this->_supportsMb4;
+        }
+        return $this->_supportsMb4 = $this->getIsPgsql();
+    }
+
+    /**
+     * Sets whether the database supports 4+ byte characters.
+     *
+     * @param bool $supportsMb4
+     */
+    public function setSupportsMb4(bool $supportsMb4)
+    {
+        $this->_supportsMb4 = $supportsMb4;
     }
 
     /**
@@ -151,26 +153,70 @@ class Connection extends \yii\db\Connection
 
             if ($this->getIsMysql()) {
                 if (!extension_loaded('pdo')) {
-                    throw new DbConnectException(Craft::t('app', 'Craft CMS requires the PDO extension to operate.'), 0, $e);
+                    throw new DbConnectException('Craft CMS requires the PDO extension to operate.', 0, $e);
                 }
                 if (!extension_loaded('pdo_mysql')) {
-                    throw new DbConnectException(Craft::t('app', 'Craft CMS requires the PDO_MYSQL driver to operate.'), 0, $e);
+                    throw new DbConnectException('Craft CMS requires the PDO_MYSQL driver to operate.', 0, $e);
                 }
             } else {
                 if (!extension_loaded('pdo')) {
-                    throw new DbConnectException(Craft::t('app', 'Craft CMS requires the PDO extension to operate.'), 0, $e);
+                    throw new DbConnectException('Craft CMS requires the PDO extension to operate.', 0, $e);
                 }
                 if (!extension_loaded('pdo_pgsql')) {
-                    throw new DbConnectException(Craft::t('app', 'Craft CMS requires the PDO_PGSQL driver to operate.'), 0, $e);
+                    throw new DbConnectException('Craft CMS requires the PDO_PGSQL driver to operate.', 0, $e);
                 }
             }
 
             Craft::error($e->getMessage(), __METHOD__);
-            throw new DbConnectException(Craft::t('app', 'Craft CMS can’t connect to the database with the credentials in config/db.php.'), 0, $e);
+            throw new DbConnectException('Craft CMS can’t connect to the database with the credentials in config/db.php.', 0, $e);
         } catch (\Throwable $e) {
             Craft::error($e->getMessage(), __METHOD__);
-            throw new DbConnectException(Craft::t('app', 'Craft CMS can’t connect to the database with the credentials in config/db.php.'), 0, $e);
+            throw new DbConnectException('Craft CMS can’t connect to the database with the credentials in config/db.php.', 0, $e);
         }
+    }
+
+    /**
+     * @inheritdoc
+     * @since 3.4.11
+     */
+    public function close()
+    {
+        parent::close();
+        $this->_supportsMb4 = null;
+    }
+
+    /**
+     * Returns the path for a new backup file.
+     *
+     * @return string
+     * @since 3.0.38
+     */
+    public function getBackupFilePath(): string
+    {
+        // Determine the backup file path
+        $currentVersion = 'v' . Craft::$app->getVersion();
+        $systemName = FileHelper::sanitizeFilename($this->_getFixedSystemName(), ['asciiOnly' => true]);
+        $filename = ($systemName ? $systemName . '_' : '') . gmdate('ymd_His') . '_' . strtolower(StringHelper::randomString(10)) . '_' . $currentVersion . '.sql';
+        return Craft::$app->getPath()->getDbBackupPath() . '/' . mb_strtolower($filename);
+    }
+
+    /**
+     * Returns the core table names whose data should be excluded from database backups.
+     *
+     * @return string[]
+     */
+    public function getIgnoredBackupTables(): array
+    {
+        return [
+            Table::ASSETINDEXDATA,
+            Table::ASSETTRANSFORMINDEX,
+            Table::SESSIONS,
+            Table::TEMPLATECACHES,
+            Table::TEMPLATECACHEQUERIES,
+            Table::TEMPLATECACHEELEMENTS,
+            '{{%cache}}',
+            '{{%templatecachecriteria}}',
+        ];
     }
 
     /**
@@ -184,14 +230,8 @@ class Connection extends \yii\db\Connection
      */
     public function backup(): string
     {
-        // Determine the backup file path
-        $currentVersion = 'v'.Craft::$app->getVersion();
-        $systemName = FileHelper::sanitizeFilename($this->_getFixedSystemName(), ['asciiOnly' => true]);
-        $filename = ($systemName ? $systemName.'_' : '').gmdate('ymd_His').'_'.strtolower(StringHelper::randomString(10)).'_'.$currentVersion.'.sql';
-        $file = Craft::$app->getPath()->getDbBackupPath().'/'.StringHelper::toLowerCase($filename);
-
+        $file = $this->getBackupFilePath();
         $this->backupTo($file);
-
         return $file;
     }
 
@@ -206,12 +246,18 @@ class Connection extends \yii\db\Connection
      */
     public function backupTo(string $filePath)
     {
+        // Fire a 'beforeCreateBackup' event
+        $event = new BackupEvent([
+            'file' => $filePath,
+            'ignoreTables' => $this->getIgnoredBackupTables(),
+        ]);
+        $this->trigger(self::EVENT_BEFORE_CREATE_BACKUP, $event);
+
         // Determine the command that should be executed
         $backupCommand = Craft::$app->getConfig()->getGeneral()->backupCommand;
 
         if ($backupCommand === null) {
-            $schema = $this->getSchema();
-            $backupCommand = $schema->getDefaultBackupCommand();
+            $backupCommand = $this->getSchema()->getDefaultBackupCommand($event->ignoreTables);
         }
 
         if ($backupCommand === false) {
@@ -219,15 +265,8 @@ class Connection extends \yii\db\Connection
         }
 
         // Create the shell command
+        $backupCommand = $this->_parseCommandTokens($backupCommand, $filePath);
         $command = $this->_createShellCommand($backupCommand);
-        $command = $this->_parseCommandTokens($command, $filePath);
-
-        // Fire a 'beforeCreateBackup' event
-        if ($this->hasEventHandlers(self::EVENT_BEFORE_CREATE_BACKUP)) {
-            $this->trigger(self::EVENT_BEFORE_CREATE_BACKUP, new BackupEvent([
-                'file' => $filePath
-            ]));
-        }
 
         $this->_executeDatabaseShellCommand($command);
 
@@ -236,6 +275,28 @@ class Connection extends \yii\db\Connection
             $this->trigger(self::EVENT_AFTER_CREATE_BACKUP, new BackupEvent([
                 'file' => $filePath
             ]));
+        }
+
+        $generalConfig = Craft::$app->getConfig()->getGeneral();
+
+        if ($generalConfig->maxBackups) {
+            $backupPath = Craft::$app->getPath()->getDbBackupPath();
+
+            // Grab all .sql files in the backup folder.
+            $files = glob($backupPath . DIRECTORY_SEPARATOR . '*.sql');
+
+            // Sort them by file modified time descending (newest first).
+            usort($files, static function($a, $b) {
+                return filemtime($a) < filemtime($b);
+            });
+
+            if (count($files) >= $generalConfig->maxBackups) {
+                $backupsToDelete = array_slice($files, $generalConfig->maxBackups);
+
+                foreach ($backupsToDelete as $backupToDelete) {
+                    FileHelper::unlink($backupToDelete);
+                }
+            }
         }
     }
 
@@ -248,12 +309,18 @@ class Connection extends \yii\db\Connection
      */
     public function restore(string $filePath)
     {
+        // Fire a 'beforeRestoreBackup' event
+        if ($this->hasEventHandlers(self::EVENT_BEFORE_RESTORE_BACKUP)) {
+            $this->trigger(self::EVENT_BEFORE_RESTORE_BACKUP, new RestoreEvent([
+                'file' => $filePath
+            ]));
+        }
+
         // Determine the command that should be executed
         $restoreCommand = Craft::$app->getConfig()->getGeneral()->restoreCommand;
 
         if ($restoreCommand === null) {
-            $schema = $this->getSchema();
-            $restoreCommand = $schema->getDefaultRestoreCommand();
+            $restoreCommand = $this->getSchema()->getDefaultRestoreCommand();
         }
 
         if ($restoreCommand === false) {
@@ -261,15 +328,8 @@ class Connection extends \yii\db\Connection
         }
 
         // Create the shell command
+        $restoreCommand = $this->_parseCommandTokens($restoreCommand, $filePath);
         $command = $this->_createShellCommand($restoreCommand);
-        $command = $this->_parseCommandTokens($command, $filePath);
-
-        // Fire a 'beforeRestoreBackup' event
-        if ($this->hasEventHandlers(self::EVENT_BEFORE_RESTORE_BACKUP)) {
-            $this->trigger(self::EVENT_BEFORE_RESTORE_BACKUP, new RestoreEvent([
-                'file' => $filePath
-            ]));
-        }
 
         $this->_executeDatabaseShellCommand($command);
 
@@ -345,7 +405,7 @@ class Connection extends \yii\db\Connection
         if (is_string($columns)) {
             $columns = StringHelper::split($columns);
         }
-        $name = $this->tablePrefix.$table.'_'.implode('_', $columns).'_pk';
+        $name = $this->tablePrefix . $table . '_' . implode('_', $columns) . '_pk';
 
         return $this->trimObjectName($name);
     }
@@ -363,7 +423,7 @@ class Connection extends \yii\db\Connection
         if (is_string($columns)) {
             $columns = StringHelper::split($columns);
         }
-        $name = $this->tablePrefix.$table.'_'.implode('_', $columns).'_fk';
+        $name = $this->tablePrefix . $table . '_' . implode('_', $columns) . '_fk';
 
         return $this->trimObjectName($name);
     }
@@ -384,7 +444,7 @@ class Connection extends \yii\db\Connection
         if (is_string($columns)) {
             $columns = StringHelper::split($columns);
         }
-        $name = $this->tablePrefix.$table.'_'.implode('_', $columns).($unique ? '_unq' : '').($foreignKey ? '_fk' : '_idx');
+        $name = $this->tablePrefix . $table . '_' . implode('_', $columns) . ($unique ? '_unq' : '') . ($foreignKey ? '_fk' : '_idx');
 
         return $this->trimObjectName($name);
     }
@@ -431,9 +491,6 @@ class Connection extends \yii\db\Connection
         return $name;
     }
 
-    // Private Methods
-    // =========================================================================
-
     /**
      * Returns a table name without the table prefix
      *
@@ -442,15 +499,8 @@ class Connection extends \yii\db\Connection
      */
     private function _getTableNameWithoutPrefix(string $table): string
     {
-        $table = $this->getSchema()->getRawTableName($table);
-
-        if ($this->tablePrefix) {
-            if (strpos($table, $this->tablePrefix) === 0) {
-                $table = substr($table, strlen($this->tablePrefix));
-            }
-        }
-
-        return $table;
+        $table = str_replace('%', '', $table);
+        return $this->getSchema()->getRawTableName($table);
     }
 
     /**
@@ -474,29 +524,28 @@ class Connection extends \yii\db\Connection
     }
 
     /**
-     * @param ShellCommand $shellCommand
+     * Parses a database backup/restore command for config tokens
+     *
+     * @param string $command The command to parse tokens in
      * @param string $file The path to the backup file
-     * @return ShellCommand
+     * @return string
      */
-    private function _parseCommandTokens(ShellCommand $shellCommand, $file): ShellCommand
+    private function _parseCommandTokens(string $command, $file): string
     {
-        $command = $shellCommand->getCommand();
-
-        // Swap out any tokens in the command
-        $dbConfig = Craft::$app->getConfig()->getDb();
+        $parsed = Db::parseDsn($this->dsn);
+        $username = $this->getIsPgsql() && !empty($parsed['user']) ? $parsed['user'] : $this->username;
+        $password = $this->getIsPgsql() && !empty($parsed['password']) ? $parsed['password'] : $this->password;
         $tokens = [
             '{file}' => $file,
-            '{port}' => $dbConfig->port,
-            '{server}' => $dbConfig->server,
-            '{user}' => $dbConfig->user,
-            '{database}' => $dbConfig->database,
-            '{schema}' => $dbConfig->schema,
+            '{port}' => $parsed['port'] ?? '',
+            '{server}' => $parsed['host'] ?? '',
+            '{user}' => $username,
+            '{password}' => addslashes(str_replace('$', '\\$', $password)),
+            '{database}' => $parsed['dbname'] ?? '',
+            '{schema}' => $this->getSchema()->defaultSchema ?? '',
         ];
 
-        $command = str_replace(array_keys($tokens), array_values($tokens), $command);
-        $shellCommand->setCommand($command);
-
-        return $shellCommand;
+        return str_replace(array_keys($tokens), $tokens, $command);
     }
 
     /**
@@ -508,10 +557,14 @@ class Connection extends \yii\db\Connection
         $success = $command->execute();
 
         // Nuke any temp connection files that might have been created.
-        FileHelper::clearDirectory(Craft::$app->getPath()->getTempPath());
+        try {
+            FileHelper::clearDirectory(Craft::$app->getPath()->getTempPath(false));
+        } catch (InvalidArgumentException $e) {
+            // the directory doesn't exist
+        }
 
         // PostgreSQL specific cleanup.
-        if (Craft::$app->getDb()->getDriverName() === DbConfig::DRIVER_PGSQL) {
+        if ($this->getIsPgsql()) {
             if (Platform::isWindows()) {
                 $envCommand = 'set PGPASSWORD=';
             } else {
@@ -523,24 +576,33 @@ class Connection extends \yii\db\Connection
         }
 
         if (!$success) {
-            throw ShellCommandException::createFromCommand($command);
+            $execCommand = $command->getExecCommand();
+
+            // Redact the PGPASSWORD
+            if ($this->getIsPgsql()) {
+                $execCommand = preg_replace_callback('/(PGPASSWORD=")([^"]+)"/i', function($match) {
+                    return $match[1] . str_repeat('•', strlen($match[2])) . '"';
+                }, $execCommand);
+            }
+
+            throw new ShellCommandException($execCommand, $command->getExitCode(), $command->getStdErr());
         }
     }
 
     /**
-     * TODO: remove this method after the next breakpoint and just use getInfo()->name directly.
+     * TODO: remove this method after the next breakpoint and just use `Craft::$app->getSystemName()` directly.
      *
      * @return string
      */
     private function _getFixedSystemName(): string
     {
-        try {
+        if ($this->columnExists(Table::INFO, 'siteName')) {
             return (new Query())
                 ->select(['siteName'])
-                ->from(['{{%info}}'])
-                ->column()[0];
-        } catch (\Throwable $e) {
-            return Craft::$app->getInfo()->name ?: Craft::$app->getSites()->getPrimarySite()->name;
+                ->from([Table::INFO])
+                ->scalar($this) ?: 'CraftCMS';
         }
+
+        return Craft::$app->getSystemName();
     }
 }

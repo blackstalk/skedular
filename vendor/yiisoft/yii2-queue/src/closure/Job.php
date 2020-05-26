@@ -11,7 +11,7 @@ use SuperClosure\Serializer;
 use yii\queue\JobInterface;
 
 /**
- * Closure Job
+ * Closure Job.
  *
  * @author Roman Zhuravlev <zhuravljov@gmail.com>
  */
@@ -24,13 +24,13 @@ class Job implements JobInterface
 
 
     /**
-     * Unserializes and executes a closure
+     * Unserializes and executes a closure.
      * @inheritdoc
      */
     public function execute($queue)
     {
         $serializer = new Serializer();
         $closure = $serializer->unserialize($this->serialized);
-        $closure();
+        return $closure();
     }
 }
