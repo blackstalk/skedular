@@ -23,6 +23,7 @@
 .project
 .settings
 *.esproj
+.env
 *.sublime-workspace
 *.sublime-project
 *.tmproj
