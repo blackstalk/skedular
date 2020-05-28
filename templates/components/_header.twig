@@ -1,4 +1,8 @@
-{% set currentTimezone = "America/Chicago" %}
+{% if getCookie('storedTimeZone') %}
+	{% set currentTimezone = getCookie('storedTimeZone') %}
+{% else %}
+	{% set currentTimezone = "America/Chicago" %}
+{% endif %}
 <!-- Navigation -->
 <nav class="slide-menu" id="slide-menu">
 	<ul>

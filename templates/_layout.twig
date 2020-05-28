@@ -54,6 +54,10 @@
 	</head>
 	<body>
 
+	{% set currentTimezoneDynamic = 'America/Denver' %}
+
+	{% do setCookie('storedTimeZone', currentTimezoneDynamic, now | date_modify("+1 hour").timestamp) %}
+
 		<div id="app" class="{% if currentUser %}logged-in{% endif %}">
 
 			{# HEADER #}
