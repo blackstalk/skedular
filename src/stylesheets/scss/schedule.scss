@@ -31,6 +31,12 @@
         ul {
             list-style: none;
             padding: 5px;
+
+            &.maxed-out {
+                .reserve-btn {
+                    display: none;
+                }
+            }
             
             li {
                 @include box-shadow;

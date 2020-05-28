@@ -12,7 +12,11 @@
     {% endif %}
 {% endmacro %}
 {% if currentUser %}
-{% set currentTimezone = "America/Chicago" %}
+    {% if getCookie('storedTimeZone') %}
+        {% set currentTimezone = getCookie('storedTimeZone') %}
+    {% else %}
+        {% set currentTimezone = "America/Chicago" %}
+    {% endif %}
 
 	<section class="form text-center">
 			<div class="container">

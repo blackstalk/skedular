@@ -1,0 +1,677 @@
+dateModified: 1590629451
+email:
+  fromEmail: philipp@rppld.co
+  fromName: 'Craft CMS Project Starter'
+  template: null
+  transportSettings: null
+  transportType: craft\mail\transportadapters\Sendmail
+fieldGroups:
+  f63ad89a-254d-4d4b-86c6-d73a3e689519:
+    name: Default
+fields:
+  1c744984-d167-4af6-b7e4-086230f6e68b:
+    contentColumnType: string
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: daysOfWeek
+    instructions: ''
+    name: 'Days of Week'
+    searchable: true
+    settings:
+      contentTable: '{{%matrixcontent_daysofweek}}'
+      maxBlocks: '7'
+      minBlocks: '7'
+      propagationMethod: all
+    translationKeyFormat: null
+    translationMethod: site
+    type: craft\fields\Matrix
+  5ffdb184-fa42-429a-9afa-d8da33c68f91:
+    contentColumnType: smallint(2)
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: reservationsAllowedPerDay
+    instructions: ''
+    name: 'Reservations allowed per day'
+    searchable: false
+    settings:
+      decimals: 0
+      defaultValue: '1'
+      max: '99'
+      min: '1'
+      prefix: ''
+      size: null
+      suffix: ''
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\fields\Number
+  77b324f8-46b3-4756-9f30-1997a3ba8e55:
+    contentColumnType: string
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: schedule
+    instructions: ''
+    name: Schedule
+    searchable: true
+    settings:
+      limit: ''
+      localizeRelations: false
+      selectionLabel: ''
+      source: null
+      sources:
+        - 'section:979a880c-a545-4399-8eaf-cd4462f41268'
+      targetSiteId: null
+      validateRelatedElements: ''
+      viewMode: null
+    translationKeyFormat: null
+    translationMethod: site
+    type: craft\fields\Entries
+  7aaf39ef-8762-4c08-be23-7dc521bad5d1:
+    contentColumnType: smallint(1)
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: daysAhead
+    instructions: ''
+    name: 'Days Ahead'
+    searchable: false
+    settings:
+      decimals: 0
+      defaultValue: '7'
+      max: '7'
+      min: '1'
+      prefix: ''
+      size: '1'
+      suffix: ''
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\fields\Number
+  a3c82cc5-0802-4a63-8f6f-358f443e8189:
+    contentColumnType: string
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: reservedUser
+    instructions: ''
+    name: User
+    searchable: true
+    settings:
+      limit: '1'
+      localizeRelations: false
+      selectionLabel: ''
+      source: null
+      sources:
+        - 'group:63d1ea93-3888-48b7-9fd1-a1703137728c'
+      targetSiteId: null
+      validateRelatedElements: ''
+      viewMode: null
+    translationKeyFormat: null
+    translationMethod: site
+    type: craft\fields\Users
+  b246e886-44ab-43e9-beba-75063ac7b2d3:
+    contentColumnType: datetime
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: reservationTime
+    instructions: ''
+    name: 'Reservation Time'
+    searchable: true
+    settings:
+      minuteIncrement: '15'
+      showDate: false
+      showTime: true
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\fields\Date
+  d3b4c54d-03cd-4ac7-8dd2-ebce21e4713a:
+    contentColumnType: datetime
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: reservationDate
+    instructions: ''
+    name: 'Reservation Date'
+    searchable: true
+    settings:
+      minuteIncrement: '15'
+      showDate: true
+      showTime: false
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\fields\Date
+  dd939d7d-5ef4-4d06-8d9f-8fa1315e0721:
+    contentColumnType: text
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: body
+    instructions: ''
+    name: Body
+    searchable: true
+    settings:
+      availableTransforms: '*'
+      availableVolumes: '*'
+      columnType: text
+      purifierConfig: ''
+      purifyHtml: '1'
+      redactorConfig: ''
+      removeEmptyTags: '1'
+      removeInlineStyles: '1'
+      removeNbsp: '1'
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\redactor\Field
+matrixBlockTypes:
+  53a71b5f-a03c-4efe-96ab-043b4322aa89:
+    field: 1c744984-d167-4af6-b7e4-086230f6e68b
+    fieldLayouts:
+      ce38b47c-d061-460e-8aff-1419eb936f28:
+        tabs:
+          -
+            fields:
+              7ae067b1-d978-44f0-ab56-32af8447042a:
+                required: false
+                sortOrder: 2
+              97232da1-c7f9-4d50-bf94-1efbd924a9ad:
+                required: true
+                sortOrder: 3
+              cbdd34a8-8bbd-4479-a467-0c18a7a682b2:
+                required: false
+                sortOrder: 1
+            name: Content
+            sortOrder: 1
+    fields:
+      7ae067b1-d978-44f0-ab56-32af8447042a:
+        contentColumnType: text
+        fieldGroup: null
+        handle: timeSlots
+        instructions: ''
+        name: 'Time Slots'
+        searchable: true
+        settings:
+          addRowLabel: 'Add a row'
+          columnType: text
+          columns:
+            __assoc__:
+              -
+                - col1
+                -
+                  __assoc__:
+                    -
+                      - heading
+                      - 'Start Time'
+                    -
+                      - handle
+                      - startTime
+                    -
+                      - width
+                      - ''
+                    -
+                      - type
+                      - time
+              -
+                - col2
+                -
+                  __assoc__:
+                    -
+                      - heading
+                      - 'End Time'
+                    -
+                      - handle
+                      - endTime
+                    -
+                      - width
+                      - ''
+                    -
+                      - type
+                      - time
+          defaults:
+            -
+              __assoc__:
+                -
+                  - col1
+                  - null
+                -
+                  - col2
+                  - null
+          maxRows: ''
+          minRows: ''
+        translationKeyFormat: null
+        translationMethod: none
+        type: craft\fields\Table
+      97232da1-c7f9-4d50-bf94-1efbd924a9ad:
+        contentColumnType: text
+        fieldGroup: null
+        handle: threshold
+        instructions: 'Number of people allowed per time slot'
+        name: threshold
+        searchable: true
+        settings:
+          byteLimit: null
+          charLimit: null
+          code: ''
+          columnType: null
+          initialRows: '4'
+          multiline: ''
+          placeholder: ''
+        translationKeyFormat: null
+        translationMethod: none
+        type: craft\fields\PlainText
+      cbdd34a8-8bbd-4479-a467-0c18a7a682b2:
+        contentColumnType: string
+        fieldGroup: null
+        handle: dayOfWeek
+        instructions: ''
+        name: 'Day of week'
+        searchable: true
+        settings:
+          optgroups: true
+          options:
+            -
+              __assoc__:
+                -
+                  - label
+                  - Monday
+                -
+                  - value
+                  - monday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Tuesday
+                -
+                  - value
+                  - tuesday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Wednesday
+                -
+                  - value
+                  - wednesday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Thursday
+                -
+                  - value
+                  - thursday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Friday
+                -
+                  - value
+                  - friday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Saturday
+                -
+                  - value
+                  - saturday
+                -
+                  - default
+                  - ''
+            -
+              __assoc__:
+                -
+                  - label
+                  - Sunday
+                -
+                  - value
+                  - sunday
+                -
+                  - default
+                  - ''
+        translationKeyFormat: null
+        translationMethod: none
+        type: craft\fields\Dropdown
+    handle: days
+    name: Days
+    sortOrder: 1
+plugins:
+  cookies:
+    edition: standard
+    enabled: true
+    schemaVersion: 1.0.0
+  cp-field-inspect:
+    edition: standard
+    enabled: true
+    schemaVersion: 1.0.0
+  element-api:
+    enabled: '1'
+    licenseKey: null
+    schemaVersion: 1.0.0
+    settings: null
+  redactor:
+    enabled: '1'
+    licenseKey: null
+    schemaVersion: 2.3.0
+    settings: null
+  scss:
+    edition: standard
+    enabled: true
+    schemaVersion: 1.0.0
+sections:
+  540d7d7f-a6bb-4d10-a178-9296fdd989d5:
+    enableVersioning: true
+    entryTypes:
+      7f4690cd-0a2d-4e87-8809-f40b3be31ffe:
+        fieldLayouts:
+          d8ddc405-cd8f-4b50-9b1e-14f08874e114:
+            tabs:
+              -
+                fields:
+                  dd939d7d-5ef4-4d06-8d9f-8fa1315e0721:
+                    required: false
+                    sortOrder: 1
+                name: Content
+                sortOrder: 1
+        handle: homepage
+        hasTitleField: false
+        name: Homepage
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: homepage
+    name: Homepage
+    previewTargets:
+      -
+        label: 'Primary entry page'
+        urlFormat: '{url}'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: index
+        uriFormat: __home__
+    type: single
+  7b1da7d8-0e57-432d-bb99-e4d62a4bbfe9:
+    enableVersioning: true
+    entryTypes:
+      9b5611f9-fe1f-4607-9feb-d0377a563300:
+        handle: signUp
+        hasTitleField: false
+        name: 'Sign Up'
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: signUp
+    name: 'Sign Up'
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: registration/_signup
+        uriFormat: sign-up
+    type: single
+  7fa08773-e15b-4314-921c-0296fe71e533:
+    enableVersioning: true
+    entryTypes:
+      2b067f11-dd5c-481f-9422-7ea1e99c1c88:
+        handle: login
+        hasTitleField: false
+        name: Login
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: login
+    name: Login
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: registration/_login
+        uriFormat: login
+    type: single
+  979a880c-a545-4399-8eaf-cd4462f41268:
+    enableVersioning: true
+    entryTypes:
+      fe756228-5895-40ca-a138-026d51a19ad7:
+        fieldLayouts:
+          cf1cafbd-44ba-4dea-b9f1-7f6d1590d505:
+            tabs:
+              -
+                fields:
+                  1c744984-d167-4af6-b7e4-086230f6e68b:
+                    required: false
+                    sortOrder: 5
+                  5ffdb184-fa42-429a-9afa-d8da33c68f91:
+                    required: false
+                    sortOrder: 4
+                  7aaf39ef-8762-4c08-be23-7dc521bad5d1:
+                    required: false
+                    sortOrder: 3
+                  a3c82cc5-0802-4a63-8f6f-358f443e8189:
+                    required: false
+                    sortOrder: 1
+                  dd939d7d-5ef4-4d06-8d9f-8fa1315e0721:
+                    required: false
+                    sortOrder: 2
+                name: Content
+                sortOrder: 1
+        handle: schedule
+        hasTitleField: true
+        name: Schedule
+        sortOrder: 1
+        titleFormat: ''
+        titleLabel: Title
+    handle: schedules
+    name: Schedules
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: schedules/_entry
+        uriFormat: 'app/{slug}'
+    type: channel
+  9aedcdf4-6fc4-4379-82d5-5159b204ea94:
+    enableVersioning: true
+    entryTypes:
+      ab12a27d-3b37-4c49-af56-0fdacd80494f:
+        fieldLayouts:
+          27a30f9c-bf3c-4302-af3b-a37015e54abd:
+            tabs:
+              -
+                fields:
+                  77b324f8-46b3-4756-9f30-1997a3ba8e55:
+                    required: true
+                    sortOrder: 2
+                  a3c82cc5-0802-4a63-8f6f-358f443e8189:
+                    required: true
+                    sortOrder: 1
+                  b246e886-44ab-43e9-beba-75063ac7b2d3:
+                    required: true
+                    sortOrder: 4
+                  d3b4c54d-03cd-4ac7-8dd2-ebce21e4713a:
+                    required: true
+                    sortOrder: 3
+                name: Reservation
+                sortOrder: 1
+        handle: reservations
+        hasTitleField: false
+        name: Reservations
+        sortOrder: 1
+        titleFormat: 'Reservation for {{reservedUser.one().username}} on {reservationDate|date(''M j, Y'')} at {reservationTime|date(''g:i:s a'')}'
+        titleLabel: Title
+    handle: reservations
+    name: Reservations
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: ''
+        uriFormat: 'reservations/{slug}'
+    type: channel
+  b656e8d7-87a7-4700-93a7-6918015d7229:
+    enableVersioning: true
+    entryTypes:
+      47830f36-8ddc-4ed5-874a-b9826f36e370:
+        handle: organizationsSearch
+        hasTitleField: false
+        name: 'Organizations Search'
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: organizationsSearch
+    name: 'Organizations Search'
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: schedules/index
+        uriFormat: app
+    type: single
+  f4dc07ca-636c-48a8-b7fd-06d39d4009fc:
+    enableVersioning: true
+    entryTypes:
+      93b6939f-3b74-4c81-9f5f-74c3980acf45:
+        handle: reserve
+        hasTitleField: false
+        name: Reserve
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: reserve
+    name: Reserve
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: schedules/_reserve
+        uriFormat: reserve
+    type: single
+siteGroups:
+  a0059ff2-95fa-4b45-9b83-d33adaccc6e4:
+    name: Default
+sites:
+  aebac91c-fff6-4f09-b5d1-72694fe08a75:
+    baseUrl: /
+    handle: default
+    hasUrls: true
+    language: en
+    name: Skedular
+    primary: true
+    siteGroup: a0059ff2-95fa-4b45-9b83-d33adaccc6e4
+    sortOrder: 1
+system:
+  edition: pro
+  live: true
+  name: Skedular
+  schemaVersion: 3.4.10
+  timeZone: America/Chicago
+users:
+  allowPublicRegistration: true
+  defaultGroup: 63d1ea93-3888-48b7-9fd1-a1703137728c
+  groups:
+    63d1ea93-3888-48b7-9fd1-a1703137728c:
+      handle: publicUsers
+      name: 'Public Users'
+      permissions:
+        - 'createentries:9aedcdf4-6fc4-4379-82d5-5159b204ea94'
+        - 'publishentries:9aedcdf4-6fc4-4379-82d5-5159b204ea94'
+        - 'deleteentries:9aedcdf4-6fc4-4379-82d5-5159b204ea94'
+        - 'editentries:9aedcdf4-6fc4-4379-82d5-5159b204ea94'
+    93873acc-f366-48e4-8150-3355c1fc38b5:
+      handle: organizations
+      name: Organizations
+  photoSubpath: ''
+  photoVolumeUid: 62e59e02-40ad-4e3b-b574-4059ccb41e80
+  requireEmailVerification: false
+volumes:
+  62e59e02-40ad-4e3b-b574-4059ccb41e80:
+    handle: uploads
+    hasUrls: true
+    name: Uploads
+    settings:
+      path: /Users/philipp/Sites/unionhaus/web/uploads
+    sortOrder: 1
+    type: craft\volumes\Local
+    url: 'http://craftcms-webpack-boilerplate.dev//uploads'

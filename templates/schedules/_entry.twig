@@ -16,7 +16,12 @@
 {% extends "_layout" %}
 
 {% block main %}
-{% set currentTimezone = "America/Chicago" %}
+
+{% if getCookie('storedTimeZone') %}
+	{% set currentTimezone = getCookie('storedTimeZone') %}
+{% else %}
+	{% set currentTimezone = "America/Chicago" %}
+{% endif %}
 
 {% do setCookie('lastVisitedSchedule', entry.slug, now | date_modify("+1 hour").timestamp) %}
 {# Sets a cookie to expire in an hour. #}
@@ -34,9 +39,10 @@
 		</div>
 		
 		{% set blocks = entry.daysOfWeek.all() %}
-		{% for day in  0..6 %}
+		{% set daysAhead = entry.daysAhead|number %}
+		{% for day in  0..daysAhead %}
 			{% set myDate = '+' ~ day ~ ' day' %}
-			<div class="schedule-day">
+			<div {% if myDate|date("m/d/Y", currentTimezone) < '06/01/2020'|date("m/d/Y", currentTimezone) %}style="display:none"{% endif %} class="schedule-day" id="day-{{ myDate|date("m-d-Y", currentTimezone) }}">
 			{% if blocks|length %}
 				{% for block in blocks %}
 					{% if block.type == "days" and block.timeSlots|length and  myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
@@ -54,17 +60,31 @@
 								{% set reservationIdsForThisDay = reservationIdsForThisDay|merge([res.id]) %}
 							{% endif %}
 						{% endfor %}
+						{% set numberOfReservationsAllowed = entry.reservationsAllowedPerDay %}
+						{% set isMaxedOut = false %}
+						{% if currentUser %}
+							{% set currentUserFoundNumTimes = 0 %}
+							{% for usersResInIds in craft.entries({
+								section: 'reservations',
+								id: reservationIdsForThisDay
+							}) %}
+								{% if usersResInIds.reservedUser.first().username == currentUser.friendlyName %}
+									{% set currentUserFoundNumTimes = currentUserFoundNumTimes + 1 %}
+								{% endif %}
+							{% endfor %}
+							{% if currentUserFoundNumTimes >= numberOfReservationsAllowed %}
+								{% set isMaxedOut = true %}
+							{% endif %}
+						{% endif %}
 						<div class="schedule-day--info"><span class="lg-text">{{ myDate|date("l", currentTimezone)|upper }}</span> <strong>{{ myDate|date("m/d/Y", currentTimezone) }}</strong> | Resevations: {{ dayReservations }}</div>
 
-						<ul {{ ("now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper) ? 'class="current-day"' }}>
+						<ul class="{% if ("now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper) %}current-day{% endif %} {% if isMaxedOut == true %}maxed-out{% endif %}">
 							{% for slot in block.timeSlots %}
 								<li>
 									<div class="row">
 										<div class="col-sm-6">
 											Start: <span class="md-text">{{ slot.startTime|date('g:i:s a', currentTimezone) }}</span> - End: <span class="md-text">{{ slot.endTime|date('g:i:s a', currentTimezone) }}</span> 
 										</div>
-									
-									
 										{% set reservationsIdsForTimeSlot = [] %}
 										{% set reservationUsersInfoForTimeSlot = [] %}
 										{% set userIsSignedUpForSlot = false %}
@@ -110,7 +130,7 @@
 													{% elseif userIsSignedUpForSlot == true %}
 														<button disabled class="f6 link dim br-pill ba ph3 pv2 mb2 dib dark-green">You're signed up!</button>
 													{% else %}
-														<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) }}" class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green">Reserve A Spot</a>
+														<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) }}" class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green reserve-btn">Reserve A Spot</a>
 													{% endif %}
 												{% endif %}
 										</div>
