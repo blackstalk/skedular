@@ -1,4 +1,4 @@
-dateModified: 1591039487
+dateModified: 1591041543
 email:
   fromEmail: philipp@rppld.co
   fromName: 'Craft CMS Project Starter'
@@ -29,8 +29,8 @@ fields:
     fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
     handle: defaultTimezone
     instructions: ''
-    name: 'Default Timezone'
-    searchable: true
+    name: 'Default App Timezone'
+    searchable: false
     settings:
       byteLimit: null
       charLimit: null
