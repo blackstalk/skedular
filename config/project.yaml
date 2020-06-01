@@ -1,4 +1,4 @@
-dateModified: 1590867704
+dateModified: 1591039487
 email:
   fromEmail: philipp@rppld.co
   fromName: 'Craft CMS Project Starter'
@@ -24,6 +24,24 @@ fields:
     translationKeyFormat: null
     translationMethod: site
     type: craft\fields\Matrix
+  53df0620-873c-4ca1-a595-2e91b6d3abcb:
+    contentColumnType: text
+    fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
+    handle: defaultTimezone
+    instructions: ''
+    name: 'Default Timezone'
+    searchable: true
+    settings:
+      byteLimit: null
+      charLimit: null
+      code: ''
+      columnType: null
+      initialRows: '4'
+      multiline: ''
+      placeholder: ''
+    translationKeyFormat: null
+    translationMethod: none
+    type: craft\fields\PlainText
   5ffdb184-fa42-429a-9afa-d8da33c68f91:
     contentColumnType: smallint(2)
     fieldGroup: f63ad89a-254d-4d4b-86c6-d73a3e689519
@@ -148,6 +166,20 @@ fields:
     translationKeyFormat: null
     translationMethod: none
     type: craft\redactor\Field
+globalSets:
+  1c9ccc72-5eb9-4272-9a71-9c37d8b2b936:
+    fieldLayouts:
+      930dce61-c74f-4d03-8c4d-dc22180ff670:
+        tabs:
+          -
+            fields:
+              53df0620-873c-4ca1-a595-2e91b6d3abcb:
+                required: false
+                sortOrder: 1
+            name: Date
+            sortOrder: 1
+    handle: globals
+    name: Globals
 matrixBlockTypes:
   53a71b5f-a03c-4efe-96ab-043b4322aa89:
     field: 1c744984-d167-4af6-b7e4-086230f6e68b
