@@ -17,10 +17,10 @@
 
 {% block main %}
 
-{% if getCookie('storedTimeZone') %}
-	{% set currentTimezone = getCookie('storedTimeZone') %}
+{% if globals.defaultTimezone %}
+	{% set currentTimezone = globals.defaultTimezone %}
 {% else %}
-	{% set currentTimezone = "America/Chicago" %}
+	{% set currentTimezone = globals.defaultTimezone %}
 {% endif %}
 
 {% do setCookie('lastVisitedSchedule', entry.slug, now | date_modify("+1 hour").timestamp) %}
