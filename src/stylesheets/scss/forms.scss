@@ -30,6 +30,10 @@
         color: #000;
         cursor: pointer;
         border: 0px;
+        &.remove-entry {
+            background-color: red;
+            color: #fff;
+        }
     }
 
 }

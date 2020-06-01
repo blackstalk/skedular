@@ -60,8 +60,16 @@
                         @include box-shadow;
                         background-color: #fff;
                         display: inline-block;
-                        margin: 0px 5px 0px 0px;
+                        margin: 10px 5px 0px 10px;
                         cursor: default;
+                        position: relative;
+                        .remove-entry {
+                            position: absolute;
+                            top: -15px;
+                            color: red;
+                            right: -5px;
+                            font-size: 25px;
+                        }
                     }
                 }
             }

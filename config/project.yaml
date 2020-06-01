@@ -1,4 +1,4 @@
-dateModified: 1590629451
+dateModified: 1590867704
 email:
   fromEmail: philipp@rppld.co
   fromName: 'Craft CMS Project Starter'
@@ -564,6 +564,38 @@ sections:
         template: ''
         uriFormat: 'reservations/{slug}'
     type: channel
+  abc60a64-a299-4a84-a907-0afbc2a919e9:
+    enableVersioning: true
+    entryTypes:
+      0e4244e2-874d-407b-9055-5d1d62a30781:
+        handle: removeReservation
+        hasTitleField: false
+        name: 'Remove Reservation'
+        sortOrder: 1
+        titleFormat: '{section.name|raw}'
+        titleLabel: null
+    handle: removeReservation
+    name: 'Remove Reservation'
+    previewTargets:
+      -
+        __assoc__:
+          -
+            - label
+            - 'Primary entry page'
+          -
+            - urlFormat
+            - '{url}'
+          -
+            - refresh
+            - '1'
+    propagationMethod: all
+    siteSettings:
+      aebac91c-fff6-4f09-b5d1-72694fe08a75:
+        enabledByDefault: true
+        hasUrls: true
+        template: schedules/_remove
+        uriFormat: remove-reservation
+    type: single
   b656e8d7-87a7-4700-93a7-6918015d7229:
     enableVersioning: true
     entryTypes:
