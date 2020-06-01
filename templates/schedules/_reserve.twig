@@ -22,16 +22,24 @@
 			<div class="container">
 				<div class="center">
                     {% set scheduleId = craft.request.getParam('scheduleId') %}
+                    {% set resId = craft.request.getParam('resId') %}
                     {% set scheduleEntry = craft.entries({ section: 'schedules', id: scheduleId }) %}
-					<h1 class="f2 f1-l fw2 white-90 mb0 lh-title"><small>You are making a reservation with</small> {{ scheduleEntry.first().title }} <small>for</small> {{ craft.request.getParam('date') }} <small>from</small> {{ craft.request.getParam('timeStart')|date('g:i A') }} <small>to</small> {{ craft.request.getParam('timeEnd')|date('g:i A') }}</h1>
+					<h1 class="f2 f1-l fw2 white-90 mb0 lh-title"><small>You are {{ (craft.request.getParam('type') == 'remove') ? 'removing' : 'making' }} a with</small> {{ scheduleEntry.first().title }} <small>for</small> {{ craft.request.getParam('date') }} <small>from</small> {{ craft.request.getParam('timeStart')|date('g:i A') }} <small>to</small> {{ craft.request.getParam('timeEnd')|date('g:i A') }}</h1>
                         <form method="post" accept-charset="UTF-8">
                             
                             {{ csrfInput() }}
-                            {{ actionInput('entries/save-entry') }}
+                            {% if craft.request.getParam('type') == 'remove' %}
+                                {{ actionInput('entries/delete-entry') }}
+                            {% else %}
+                                {{ actionInput('entries/save-entry') }}
+                            {% endif %}
                             {# <input type="hidden" name="redirect" value="{{ scheduleEntry.first().uri }}"> #}
                             {# {{ redirectInput('viewentry/{slug}') }} #}
                             {{ redirectInput( 'app/' ~ scheduleEntry.first().slug ) }}
                             {{ hiddenInput('sectionId', '8') }}
+                            {% if craft.request.getParam('type') == 'remove' %}
+                                {{ hiddenInput('entryId', resId) }}
+                            {% endif %}
                             {{ hiddenInput('enabled', '1') }}
                             {# {{ hiddenInput('status', 'live') }} #}
                             {# {{ hiddenInput('reservedUser', currentUser.id) }}
@@ -100,9 +108,16 @@
                             {% if entry is defined %}
                                 {{ _self.errorList(entry.getErrors('body')) }}
                             {% endif %} #}
-                            <div class="text-center">
-                                <button type="submit">Confirm Reservation</button>
-                            </div>      
+                            {% if craft.request.getParam('type') == 'remove' %}
+                                <div class="text-center">
+                                    <button class="remove-entry" type="submit">Remove Reservation</button>
+                                </div> 
+                            {% else %}
+                                <div class="text-center">
+                                    <button type="submit">Confirm Reservation</button>
+                                </div> 
+                            {% endif %}
+                                 
                         </form>
             </div>
         </div>

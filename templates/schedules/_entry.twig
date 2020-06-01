@@ -96,6 +96,7 @@
 											{% if resInIds.reservationTime|date('g:i:s a', currentTimezone) == slot.startTime|date('g:i:s a', currentTimezone) %}
 												{% set reservationsIdsForTimeSlot = reservationsIdsForTimeSlot|merge([resInIds.id]) %}
 												{% set reservedUserInfo = {
+													resId: resInIds.id,
 													userId: resInIds.reservedUser.one().id,
 													userName: resInIds.reservedUser.one().username
 												} %}
@@ -117,10 +118,12 @@
 												{% if reservationUsersInfoForTimeSlot|length > 0 %}
 													Signed Up:
 													{% for userInfo in reservationUsersInfoForTimeSlot %}
-														<div class="schedule-day--attendee">{{ userInfo.userName }}</div>
 														{% if currentUser and userInfo.userName == currentUser.friendlyName %}
 															{% set userIsSignedUpForSlot = true %}
+														{% else %}
+															{% set userIsSignedUpForSlot = false %}
 														{% endif %}
+														<div class="schedule-day--attendee">{% if userIsSignedUpForSlot == true %}<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) ~ '&type=remove&resId=' ~ userInfo.resId }}" class="remove-entry"><i class="zmdi zmdi-close-circle"></i></a>{% endif %}{{ userInfo.userName }}</div>
 													{% endfor %}
 												{% endif %}
 										

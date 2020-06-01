@@ -33,6 +33,8 @@
 		#}
 		{# {% hook 'seomaticRender' %} #}
 		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-grid-only@1.0.0/bootstrap.css" integrity="sha256-9imRszwBuS30D+LpkdIYNYpcgU5lDinHqIqkR0X6fSc=" crossorigin="anonymous">
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/material-design-iconic-font/2.2.0/css/material-design-iconic-font.min.css">
+
 
 		<link rel="home" href="{{ siteUrl }}" />
 
@@ -70,7 +72,7 @@
 			{# MAIN #}
 			<main role="main">
 			<!-- Content panel -->
-				<div id="content" class="cover bg-left bg-center-l {% if entry.uri == "__home__" or entry.uri == "login" or entry.uri == "sign-up" or entry.uri == "reserve" %}home-container{% endif %}">
+				<div id="content" class="cover bg-left bg-center-l {% if entry.uri == "__home__" or entry.uri == "login" or entry.uri == "sign-up" or entry.uri == "reserve" or entry.uri == "remove-reservation" %}home-container{% endif %}">
 					{% include 'components/_navbar.twig' %}
 					{% block main %}{% endblock %}
 				</div>
