@@ -1,7 +1,7 @@
-{% if getCookie('storedTimeZone') %}
-	{% set currentTimezone = getCookie('storedTimeZone') %}
+{% if globals.defaultTimezone %}
+	{% set currentTimezone = globals.defaultTimezone %}
 {% else %}
-	{% set currentTimezone = "America/Chicago" %}
+	{% set currentTimezone = globals.defaultTimezone %}
 {% endif %}
 <!-- Navigation -->
 <nav class="slide-menu" id="slide-menu">

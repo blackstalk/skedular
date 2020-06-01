@@ -56,7 +56,7 @@
 	</head>
 	<body>
 
-	{% set currentTimezoneDynamic = 'America/Denver' %}
+	{% set currentTimezoneDynamic = globals.defaultTimezone %}
 
 	{% do setCookie('storedTimeZone', currentTimezoneDynamic, now | date_modify("+1 hour").timestamp) %}
 
