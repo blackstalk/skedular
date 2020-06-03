@@ -45,7 +45,7 @@
 			<div {% if myDate|date("m/d/Y", currentTimezone) < '06/01/2020'|date("m/d/Y", currentTimezone) %}style="display:none"{% endif %} class="schedule-day" id="day-{{ myDate|date("m-d-Y", currentTimezone) }}">
 			{% if blocks|length %}
 				{% for block in blocks %}
-					{% if block.type == "days" and block.timeSlots|length and  myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+					{% if block.type == "days" and block.timeSlots|length and block.timeSlots[0].startTime and myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
 						{# {% if "now"|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
 						We are here
 						{% endif %}
@@ -55,7 +55,7 @@
 						{% for res in craft.entries({ section: 'reservations' }) %}
 							{# {{ myDate|date("F j, Y", currentTimezone) }}
 							{{ res.reservationDate|date("F j, Y", currentTimezone) }} #}
-							{% if res.reservationDate|date("F j, Y", currentTimezone) == myDate|date("F j, Y", currentTimezone) %}
+							{% if res.reservationDate|date("F j, Y", currentTimezone) == myDate|date("F j, Y", currentTimezone) and res.schedule.first().id == entry.id  %}
 								{% set dayReservations = dayReservations + 1 %}
 								{% set reservationIdsForThisDay = reservationIdsForThisDay|merge([res.id]) %}
 							{% endif %}
@@ -88,7 +88,24 @@
 										{% set reservationsIdsForTimeSlot = [] %}
 										{% set reservationUsersInfoForTimeSlot = [] %}
 										{% set userIsSignedUpForSlot = false %}
-										{% set isExpired = (slot.startTime|date('g:i:s a', currentTimezone) < "now"|date("g:i:s a", currentTimezone) and myDate|date("l", currentTimezone)|upper == "now"|date("l", currentTimezone)|upper ) ? true : false %}
+										{% set isExpired = false %}
+										{% set slotStartTimeString = ( slot.startTime is not null ) ? slot.startTime.format('g:i:s a') : "now"|date("g:i:s a", currentTimezone) %}
+										{% set dateDate = "now"|date("m/d/Y", currentTimezone) %}
+										{# {% set nowDateString = dateDate.format("m/d/Y") %} #}
+										{% set nowSlotDateTimeString = dateDate ~ ' ' ~ slotStartTimeString %}
+										{# {{ nowSlotDateTimeString }} #}
+										{% if myDate|date("l", currentTimezone)|upper == "now"|date("l", currentTimezone)|upper %}
+											{# {{ myDate|date("l", currentTimezone)|upper }} = {{ "now"|date("l", currentTimezone)|upper }} #}
+											{% if nowSlotDateTimeString|date('g:i:s a', currentTimezone) < "now"|date("g:i:s a", currentTimezone) %}
+											    {# {{ nowSlotDateTimeString|date('m/d/Y g:i:s a', currentTimezone) }} is less than {{ "now"|date("m/d/Y g:i:s a", currentTimezone) }} #}
+												{% set isExpired = true %}
+											{% else %}
+												{# {{ nowSlotDateTimeString|date('m/d/Y g:i:s a', currentTimezone) }} is greater than {{ "now"|date("m/d/Y g:i:s a", currentTimezone) }} #}
+												{% set isExpired = false %}
+											{% endif %}
+										{% else %}
+											{% set isExpired = false %}
+										{% endif %}
 										{% for resInIds in craft.entries({
 											section: 'reservations',
 											id: reservationIdsForThisDay
@@ -107,9 +124,17 @@
 											{% endif %}
 										{% endfor %}
 										{% if isExpired == false %}
+											{% if slot.reservationsPerSlot|length and slot.reservationsPerSlot is not empty and slot.reservationsPerSlot > 0 %}
+												{% set newThreshold = slot.reservationsPerSlot %}
+											{% elseif block.threshold is not empty and block.threshold > 0 %}
+												{% set newThreshold = block.threshold %}
+											{% else %}
+												{% set newThreshold = 1 %}
+											{% endif %}
+											{% set remainingSeats = newThreshold - reservationsIdsForTimeSlot|length %}
 											<div class="col-sm-2">Signed Up: <span class="md-text">{{ reservationsIdsForTimeSlot|length }}</span></div>
-											<div class="col-sm-2">Allowed: <span class="md-text">{{ block.threshold }}</span></div>
-											<div class="col-sm-2">Remaining: <span class="md-text">{{ (block.threshold - reservationsIdsForTimeSlot|length) }}</span> of <span class='md-text'>{{ block.threshold }}</span></div>
+											<div class="col-sm-2">Allowed: <span class="md-text">{{ newThreshold }}</span></div>
+											<div class="col-sm-2">Remaining: <span class="md-text">{{ remainingSeats }}</span> of <span class='md-text'>{{ newThreshold }}</span></div>
 										{% endif %}
 									</div> <!-- end row -->
 									<div class="row">
@@ -133,7 +158,9 @@
 													{% elseif userIsSignedUpForSlot == true %}
 														<button disabled class="f6 link dim br-pill ba ph3 pv2 mb2 dib dark-green">You're signed up!</button>
 													{% else %}
-														<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) }}" class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green reserve-btn">Reserve A Spot</a>
+														{% if remainingSeats > 0 %}
+															<a href="{{ craft.app.sites.primarySite.baseUrl ~ 'reserve/?scheduleId=' ~ entry.id ~ '&date=' ~ myDate|date("m/d/Y", currentTimezone)|url_encode ~ '&timeStart=' ~ slot.startTime|date('g:i:s a', currentTimezone)|url_encode ~ '&timeEnd=' ~ slot.endTime|date('g:i:s a', currentTimezone) }}" class="f6 grow no-underline br-pill ph3 pv2 mb2 dib white bg-app-green reserve-btn">Reserve A Spot</a>
+														{% endif %}
 													{% endif %}
 												{% endif %}
 										</div>
@@ -141,7 +168,7 @@
 								</li>
 							{% endfor %}
 						<ul>
-					{% elseif block.type == "days" and block.timeSlots|length < 1 and myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
+					{% elseif block.type == "days" and block.timeSlots is not null and block.timeSlots[0].startTime is empty and myDate|date("l", currentTimezone)|upper == block.dayOfWeek|upper %}
 						<span class="lg-text">{{ block.dayOfWeek|upper }}</span> is closed
 					{% endif %}
 				{% endfor %}

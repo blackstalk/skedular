@@ -1,4 +1,4 @@
-dateModified: 1591041543
+dateModified: 1591195098
 email:
   fromEmail: philipp@rppld.co
   fromName: 'Craft CMS Project Starter'
@@ -192,7 +192,7 @@ matrixBlockTypes:
                 required: false
                 sortOrder: 2
               97232da1-c7f9-4d50-bf94-1efbd924a9ad:
-                required: true
+                required: false
                 sortOrder: 3
               cbdd34a8-8bbd-4479-a467-0c18a7a682b2:
                 required: false
@@ -244,6 +244,22 @@ matrixBlockTypes:
                     -
                       - type
                       - time
+              -
+                - col3
+                -
+                  __assoc__:
+                    -
+                      - heading
+                      - 'Reservations per slot'
+                    -
+                      - handle
+                      - reservationsPerSlot
+                    -
+                      - width
+                      - ''
+                    -
+                      - type
+                      - number
           defaults:
             -
               __assoc__:
@@ -253,6 +269,9 @@ matrixBlockTypes:
                 -
                   - col2
                   - null
+                -
+                  - col3
+                  - ''
           maxRows: ''
           minRows: ''
         translationKeyFormat: null
