@@ -2,6 +2,11 @@
 
     $this: &;
 
+    .errors {
+        color: red;
+        list-style: none;
+    }
+
     .form-group {
         padding: 10px 20px;
 
